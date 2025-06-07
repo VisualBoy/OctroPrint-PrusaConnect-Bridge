@@ -49,10 +49,9 @@ def params():
 	package_data = {plugin_package: package_data_dirs(plugin_package, ['static', 'templates'])}
 	include_package_data = True
 
-	# If you have any package data that needs to be accessible on the file system, such as templates or static assets
-	# this plugin is not zip_safe.
+	# If this plugin have any package data that needs to be accessible on the file system, such as templates or static assets, thien plugin will not be	zip_safe
 	zip_safe = True
-
+ 
 	# No specific requirements for now
 	install_requires = []
 
