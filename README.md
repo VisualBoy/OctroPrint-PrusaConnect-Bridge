@@ -50,7 +50,7 @@ A bridge plugin to connect <strong>OctoPrint</strong> with <strong>Prusa Connect
 
 ```bash
 cd ~/.octoprint/plugins
-git clone https://github.com/VisualBoy/PrusaConnect-Bridge.git OctoPrint-PrusaConnect-Bridge
+git clone https://github.com/VisualBoy/PrusaConnect-Bridge.git PrusaConnect-Bridge
 ```
 
 Or download the ZIP and install via Plugin Manager:
@@ -67,7 +67,7 @@ Or download the ZIP and install via Plugin Manager:
 
 1. Go to **OctoPrint Settings > PrusaConnect Bridge**
 2. Follow the registration wizard to link your OctoPrint instance to your Prusa Connect account
-3. Enter the temporary code on [connect.prusa3d.com](https://connect.prusa3d.com)
+3. Enter the ***temporary code*** on [connect.prusa3d.com](https://connect.prusa3d.com)
 4. Save configuration settings
 
 ### 📊 Monitoring & Control
