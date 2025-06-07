@@ -4,10 +4,10 @@ We are about to start the development of an OctoPrint plugin . The main goal is 
 
 **Project Setup and Resources:**
 
-- **Starting Repository:** You will be working on my GitHub repository https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge,
+- **Starting Repository:** You will be working on my GitHub repository https://github.com/VisualBoy/PrusaConnect-Bridge,
  I will provide you with access to this repository and the specific branch where you should commit your work.
 - **Reference Materials:** You will have access to:
-    1. A detailed research report I received, which outlines the strategy, architecture, and technical details for this plugin https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge/raw/refs/heads/main/.doc/Prusa%20Connect%20bridge%20for%20Octoprint%20overview.md
+    1. A detailed research report I received, which outlines the strategy, architecture, and technical details for this plugin https://github.com/VisualBoy/PrusaConnect-Bridge/raw/refs/heads/main/.doc/Prusa_Connect_bridge_for_Octoprint_overview.md
     2. The official documentation for OctoPrint plugin development https://docs.octoprint.org/en/master/plugins/gettingstarted.html 
     3. The official documentation for the Prusa Connect SDK (`prusa-connect-sdk-printer`). Please refer to these documents for a thorough understanding of the context and technical specifications https://github.com/prusa3d/Prusa-Connect-SDK-Printer
 
@@ -43,12 +43,12 @@ I look forward to seeing your commits. Thanks!
 
 ### Prompt v2:
 
-Objective: Please develop the OctoPrint plugin located at [https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge](https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge). This plugin is being developed from a fork of the OctoPrint "Hello World" plugin example. The primary goal is to integrate a Geeetech A10 3D printer (running Marlin 2.1 firmware and managed by OctoPrint on a Raspberry Pi) with the Prusa Connect cloud service. This integration will be achieved by utilizing the official `prusa-connect-sdk-printer` Software Development Kit (SDK) provided by Prusa.
+Objective: Please develop the OctoPrint plugin located at [https://github.com/VisualBoy/PrusaConnect-Bridge](https://github.com/VisualBoy/PrusaConnect-Bridge). This plugin is being developed from a fork of the OctoPrint "Hello World" plugin example. The primary goal is to integrate a Geeetech A10 3D printer (running Marlin 2.1 firmware and managed by OctoPrint on a Raspberry Pi) with the Prusa Connect cloud service. This integration will be achieved by utilizing the official `prusa-connect-sdk-printer` Software Development Kit (SDK) provided by Prusa.
 
 Project Setup and Resources:
-- Starting Repository: You will be working on the GitHub repository: [https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge](https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge). Please commit your work to a new branch, for example, `feature/prusa-connect-integration` (or a specific branch I will designate).
+- Starting Repository: You will be working on the GitHub repository: [https://github.com/VisualBoy/PrusaConnect-Bridge](https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge). Please commit your work to a new branch, for example, `feature/prusa-connect-integration` (or a specific branch I will designate).
 - Reference Materials:
-    1. A detailed research report outlining the strategy, architecture, and technical details for this plugin: [https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge/raw/refs/heads/main/.doc/Prusa%20Connect%20bridge%20for%20Octoprint%20overview.md](https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge/raw/refs/heads/main/.doc/Prusa%20Connect%20bridge%20for%20Octoprint%20overview.md)
+    1. A detailed research report outlining the strategy, architecture, and technical details for this plugin: [https://github.com/VisualBoy/PrusaConnect-Bridge/raw/refs/heads/main/.doc/Prusa_Connect_bridge_for_Octoprint_overview.md](https://github.com/VisualBoy/PrusaConnect-Bridge/raw/refs/heads/main/.doc/Prusa_Connect_bridge_for_Octoprint_overview.md)
     2. The official documentation for OctoPrint plugin development: [https://docs.octoprint.org/en/master/plugins/gettingstarted.html](https://docs.octoprint.org/en/master/plugins/gettingstarted.html)
     3. The official documentation for the Prusa Connect SDK (`prusa-connect-sdk-printer`): [https://github.com/prusa3d/Prusa-Connect-SDK-Printer](https://github.com/prusa3d/Prusa-Connect-SDK-Printer)
     Please refer to these documents for a thorough understanding of the context and technical specifications.
