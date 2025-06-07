@@ -1,14 +1,15 @@
 Hi Jules,
 
-We are about to start the development of an OctoPrint plugin. The main goal is to integrate my Geeetech A10 3D printer (running Marlin 2.1 firmware, currently managed by OctoPrint on a Raspberry Pi) with Prusa Connect. To do this, we will use the official `prusa-connect-sdk-printer` Software Development Kit (SDK) provided by Prusa.
+We are about to start the development of an OctoPrint plugin . The main goal is to integrate my Geeetech A10 3D printer (running Marlin 2.1 firmware, currently managed by OctoPrint on a Raspberry Pi) with Prusa Connect. To do this, we will use the official `prusa-connect-sdk-printer` Software Development Kit (SDK) provided by Prusa.
 
 **Project Setup and Resources:**
 
-- **Starting Repository:** You will be working on my GitHub repository, which is a fork of the "Hello World" example for OctoPrint plugins. I will provide you with access to this repository and the specific branch where you should commit your work.
+- **Starting Repository:** You will be working on my GitHub repository https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge,
+ I will provide you with access to this repository and the specific branch where you should commit your work.
 - **Reference Materials:** You will have access to:
-    1. A detailed research report I received, which outlines the strategy, architecture, and technical details for this plugin.
-    2. The official documentation for OctoPrint plugin development.
-    3. The official documentation for the Prusa Connect SDK (`prusa-connect-sdk-printer`). Please refer to these documents for a thorough understanding of the context and technical specifications.
+    1. A detailed research report I received, which outlines the strategy, architecture, and technical details for this plugin https://github.com/VisualBoy/OctroPrint-PrusaConnect-Bridge/raw/refs/heads/main/.doc/Prusa%20Connect%20bridge%20for%20Octoprint%20overview.md
+    2. The official documentation for OctoPrint plugin development https://docs.octoprint.org/en/master/plugins/gettingstarted.html 
+    3. The official documentation for the Prusa Connect SDK (`prusa-connect-sdk-printer`). Please refer to these documents for a thorough understanding of the context and technical specifications https://github.com/prusa3d/Prusa-Connect-SDK-Printer
 
 **Expected Output:** The primary output of your work will be functional Python code, committed iteratively to the designated branch of the GitHub repository. Each commit should represent a functional step forward, allowing me to test the plugin as development progresses.
 
@@ -35,10 +36,5 @@ The ultimate goal is to have a robust and functional OctoPrint plugin that succe
 I look forward to seeing your commits. Thanks!
 
 
-Original plan and detailed guide: https://docs.google.com/document/d/e/2PACX-1vSLgcRGVXWLDU1-cLkHXmlMQWvMm7EkxR4McA4OMBsM8tB6kceBPiE8X_hICL_O2RZn-WEKfENYUyLF/pub
-
-Octropint plugins documentation: https://docs.octoprint.org/en/master/plugins/gettingstarted.html
-
-Python printer library for Prusa Connect: https://github.com/prusa3d/Prusa-Connect-SDK-Printer
 
 
