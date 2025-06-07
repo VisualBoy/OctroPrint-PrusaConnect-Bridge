@@ -17,6 +17,7 @@ from octoprint.util import RepeatedTimer
 from prusa.connect.printer.filesystem import FileSystemNode, NodeType
 # octoprint.plugin required for SettingsPlugin.on_settings_save
 import octoprint.plugin
+from octoprint.plugin import WizardPlugin # Import WizardPlugin
 from octoprint.events import Events # Added for EventHandlerPlugin
 
 
@@ -25,7 +26,8 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                              octoprint.plugin.TemplatePlugin,
                              octoprint.plugin.StartupPlugin,
                              octoprint.plugin.SimpleApiPlugin,
-                             octoprint.plugin.EventHandlerPlugin): # Added EventHandlerPlugin
+                             octoprint.plugin.EventHandlerPlugin, # Added EventHandlerPlugin
+                             WizardPlugin): # Add WizardPlugin
 
     def __init__(self):
         # Initialize the logger
@@ -41,6 +43,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         self.temp_code_displayed = False
         self.telemetry_timer = None
         self.last_status_sent_to_ui = ""
+        self._registration_error_message = None # For wizard error reporting
         self._logger.info("PrusaConnectBridgePlugin initialized.")
 
 
@@ -181,15 +184,16 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                 self._logger.info("SDK loop thread already running.")
             self._start_telemetry_timer()
         else:
-            self._logger.info("No token found in settings. Starting registration process.")
+            self._logger.info("No token found in settings. Registration will be handled by the wizard if required.")
+            # Ensure SDK loop is running, as printer.register() might need it.
             if not self.sdk_thread or not self.sdk_thread.is_alive():
-                self._logger.info("Starting SDK loop thread for registration.")
-                self.sdk_thread = threading.Thread(target=self.prusa_printer.loop, daemon=True, name="PrusaConnectSDKLoop")
+                self._logger.info("Starting SDK loop thread (no token, for potential wizard registration).")
+                self.sdk_thread = threading.Thread(target=self.prusa_printer.loop, daemon=True, name="PrusaConnectSDKLoop-PreToken")
                 self.sdk_thread.start()
-                self._logger.info("SDK loop thread started.")
+                self._logger.info("SDK loop thread started for potential wizard-led registration.")
             else:
-                self._logger.info("SDK loop thread already running. Proceeding with registration.")
-            self._initiate_registration()
+                self._logger.info("SDK loop thread already running (no token). Wizard will handle registration if needed.")
+            # DO NOT call _initiate_registration() here. It will be called by the wizard.
         self._logger.info("PrusaConnectBridgePlugin on_after_startup complete.")
 
     def _register_sdk_handlers(self):
@@ -419,27 +423,30 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
     # --- End Command Handlers ---
 
     def _initiate_registration(self):
-        self._logger.info("Attempting to register with Prusa Connect to get a temporary code...")
+        self._logger.info("Initiating Prusa Connect registration process (e.g., via wizard or manual trigger)...")
         if not self.prusa_printer: # Guard against uninitialized printer object
-            self._logger.error("Cannot initiate registration: prusa_printer not initialized.", exc_info=True) # Should ideally include exc_info if this is unexpected
+            self._logger.error("Cannot initiate registration: prusa_printer not initialized.", exc_info=True)
             return
 
         try:
-            self.prusa_printer.register()
+            self.prusa_printer.register() # This call attempts to get tmp_code
             tmp_code = self.prusa_printer.tmp_code
 
             if tmp_code:
-                self._logger.info(f"Received temporary code from Prusa Connect: {tmp_code}")
+                self._logger.info(f"Successfully received temporary code from Prusa Connect: {tmp_code}")
                 self._settings.set(["prusa_connect_tmp_code"], tmp_code)
                 self._settings.save()
-                self.temp_code_displayed = True
+                self.temp_code_displayed = True # Legacy flag, might not be used by wizard
+                self._registration_error_message = None # Clear any previous error
                 self._start_token_retrieval_timer(tmp_code)
             else:
-                self._logger.error("Failed to retrieve temporary code from Prusa Connect (tmp_code is None).")
+                self._logger.error("Failed to retrieve temporary code from Prusa Connect (tmp_code is None after register() call).")
+                self._registration_error_message = "Failed to obtain temporary code from Prusa Connect. Server might be busy or unreachable. Please check logs."
         except Exception as e:
-            self._logger.error(f"Error during Prusa Connect self.prusa_printer.register() call: {e}", exc_info=True)
-            # Update UI status to reflect this failure
-            self.last_status_sent_to_ui = "" # Force status update
+            self._logger.error(f"Exception during Prusa Connect self.prusa_printer.register() call: {e}", exc_info=True)
+            self._registration_error_message = f"Error obtaining temp code: {str(e)}. Please check logs and network."
+        finally:
+            # Always update status, whether success or failure, to push error message or new tmp_code
             self._get_prusa_connect_status()
 
 
@@ -482,39 +489,55 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         current_tmp_code = self.prusa_printer.tmp_code # Use current tmp_code for logging
         self._logger.info(f"Checking for token with tmp_code: {current_tmp_code}...")
         try:
-            self.prusa_printer.get_token() # This method internally tries to get the token
+            # get_token() returns True if token is obtained, False otherwise.
+            # It sets self.prusa_printer.token and self.prusa_printer.token_set internally.
+            token_obtained_now = self.prusa_printer.get_token()
 
-            # Timer's condition (not self.prusa_printer.token_set) handles stopping.
-            # If token_set becomes true, timer stops and _token_retrieved_successfully is called.
-            if not self.prusa_printer.token_set:
-                self._logger.info(f"Token not yet available for tmp_code: {current_tmp_code}.")
-            # else: Token is set, log will be in _token_retrieved_successfully
+            if token_obtained_now:
+                # This means the token was just obtained in this call.
+                # The RepeatedTimer's condition will cause it to stop, and _token_retrieved_successfully will be called.
+                self._logger.info(f"Token appears to have been retrieved successfully for tmp_code: {current_tmp_code} during get_token() call.")
+                self._registration_error_message = None # Clear error as we got a token
+                # _token_retrieved_successfully will handle saving and further status updates
+            elif self.prusa_printer.token_set:
+                # Token was already set, but timer is still running (shouldn't happen if condition is correct)
+                self._logger.info("Token was already set. Timer should have stopped.")
+                self._registration_error_message = None # Clear error
+            else:
+                # Token not yet available, no exception, this is normal polling
+                self._logger.info(f"Token not yet available for tmp_code: {current_tmp_code}. Polling continues.")
+                # Don't clear _registration_error_message here, an error might be transient from previous attempt
+                # Only clear error on explicit success.
         except Exception as e:
             self._logger.error(f"Error while checking for token with tmp_code {current_tmp_code}: {e}", exc_info=True)
+            self._registration_error_message = f"Error polling for token: {str(e)}. Will retry."
             # Update UI to reflect potential issue
-            self.last_status_sent_to_ui = "" ; self._get_prusa_connect_status()
+            self._get_prusa_connect_status() # Push error to UI
 
     def _token_retrieved_successfully(self):
         if not self.prusa_printer or not self.prusa_printer.token: # Guard
             self._logger.error("Token retrieved successfully callback, but printer object or token is None. This should not happen.", exc_info=True)
+            self._registration_error_message = "Internal error after token retrieval. Please check logs."
+            self._get_prusa_connect_status()
             return
 
         token = self.prusa_printer.token
-        self._logger.info(f"Successfully retrieved Prusa Connect token: {token[:4]}...{token[-4:]}") # Log only partial token
+        self._logger.info(f"Successfully retrieved and confirmed Prusa Connect token: {token[:4]}...{token[-4:]}")
         self._settings.set(["prusa_connect_token"], token)
         self._settings.set(["prusa_connect_tmp_code"], None) # Clear temp code from settings
         self._settings.save()
+        self._registration_error_message = None # Clear any errors as we have succeeded
 
         self.temp_code_displayed = False # Reset flag
-        self.last_status_sent_to_ui = "" # Force UI update
-        self._get_prusa_connect_status()
+        # self.last_status_sent_to_ui = "" # This is implicitly handled by calling _get_prusa_connect_status()
+        self._get_prusa_connect_status() # Ensure UI is updated with new token status
 
         if self.token_retrieval_timer:
             # The timer should have already stopped itself due to the condition.
             # This is an explicit cancel for safety, though normally not needed.
             self.token_retrieval_timer.cancel()
-            self.token_retrieval_timer = None
-            self._logger.info("Token retrieval timer stopped.")
+            self.token_retrieval_timer = None # Clear the timer object
+            self._logger.info("Token retrieval timer stopped and cleared.")
 
         # Ensure the printer object is configured with the new token for the SDK loop.
         # The SDK's Printer.token attribute is set by get_token().
@@ -619,7 +642,8 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
     ##~~ TemplatePlugin mixin
     def get_template_configs(self):
         return [
-            dict(type="settings", template="prusaconnectbridge_settings.jinja2", custom_bindings=False)
+            dict(type="settings", template="prusaconnectbridge_settings.jinja2", custom_bindings=False),
+            dict(type="wizard", name="prusaconnectbridge", template="prusaconnectbridge_wizard.jinja2", custom_bindings=True)
         ]
 
     def get_template_vars(self):
@@ -635,25 +659,62 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         tmp_code = self._settings.get(["prusa_connect_tmp_code"])
         sn = self._settings.get(["prusa_connect_sn"])
         status = "Status Unknown. Please check logs." # Default
+        is_token_available = False
+        tmp_code_to_send = None
+        token_display_partial_val = None
 
         if self.prusa_printer and self.prusa_printer.token_set and token:
-            token_display = f"{token[:4]}...{token[-4:]}" if token and len(token) > 8 else "Active"
-            status = f"Registered (Token: {token_display})"
-        elif tmp_code and self.token_retrieval_timer and self.token_retrieval_timer.is_alive():
+            status_token_display = f"{token[:4]}...{token[-4:]}" if token and len(token) > 8 else "Set"
+            status = f"Registered (Token: {status_token_display})"
+            is_token_available = True
+            if len(token) > 8:
+                token_display_partial_val = f"{token[:4]}...{token[-4:]}"
+            elif token:
+                token_display_partial_val = "Token Set (Short)"
+            else:
+                token_display_partial_val = "Token Set"
+            # If we are registered, there should be no persistent registration error message.
+            # self._registration_error_message = None # Cleared in _token_retrieved_successfully
+
+        elif tmp_code and self.token_retrieval_timer and self.token_retrieval_timer.is_alive() and not self._registration_error_message:
             status = f"Awaiting code entry on Prusa Connect: {tmp_code}"
-        elif tmp_code:
+            tmp_code_to_send = tmp_code
+        elif tmp_code and not self._registration_error_message: # tmp_code exists, timer might not be active (e.g. restart)
              status = f"Has temporary code {tmp_code}. Registration process may be paused or will resume/restart."
+             tmp_code_to_send = tmp_code
+        elif self._registration_error_message:
+            status = "Registration Error" # General status text for error
+            tmp_code_to_send = tmp_code # Still send tmp_code if we have one
+            # The specific error is in self._registration_error_message
         elif not token and self.prusa_printer and hasattr(self.prusa_printer, 'tmp_code') and self.prusa_printer.tmp_code and self.sdk_thread and self.sdk_thread.is_alive():
              status = f"Not Registered. SDK active. Temp code from SDK: {self.prusa_printer.tmp_code}. Waiting for user entry."
+             tmp_code_to_send = self.prusa_printer.tmp_code
         elif not token and self.sdk_thread and self.sdk_thread.is_alive():
-            status = "Not Registered. SDK is active, attempting to initialize registration..."
+            status = "Not Registered. SDK is active. Wizard will guide registration if needed."
         elif not token:
-             status = "Not Registered. SDK may not be active or initialized."
+             status = "Not Registered. SDK may not be active or initialized. Wizard will guide registration if needed."
 
-        # Push status updates to UI via plugin message if it has changed
-        if self.last_status_sent_to_ui != status: # Check against self.last_status_sent_to_ui
-            self._plugin_manager.send_plugin_message(self._identifier, dict(status_text=status, prusa_connect_sn=sn if sn else "Not set"))
+
+        current_message_content = dict(
+            status_text=status,
+            prusa_connect_sn=sn if sn else "Not set",
+            tmp_code=tmp_code_to_send,
+            token_available=is_token_available,
+            token_display_partial=token_display_partial_val,
+            registration_error_message=self._registration_error_message # Add the error message
+        )
+
+        # Push status updates to UI via plugin message if it has changed.
+        # Add self._registration_error_message to the tuple for change detection.
+        simplified_current_status_tuple = (status, tmp_code_to_send, is_token_available, token_display_partial_val, self._registration_error_message)
+        simplified_last_status_tuple = getattr(self, "_last_simplified_status_pushed", None)
+
+        if simplified_last_status_tuple != simplified_current_status_tuple:
+            self._logger.debug(f"Sending PrusaConnectBridge plugin message: {current_message_content}")
+            self._plugin_manager.send_plugin_message(self._identifier, current_message_content)
             self.last_status_sent_to_ui = status
+            self._last_simplified_status_pushed = simplified_current_status_tuple
+
         return status
 
     ##~~ AssetPlugin mixin
@@ -886,6 +947,91 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                 pip="https://github.com/VisualBoy/OctoPrint-PrusaConnect-Bridge/archive/{target_version}.zip"
             )
         )
+
+    ##~~ WizardPlugin mixin
+    def get_wizard_version(self):
+        return 1 # Version of the wizard
+
+    def is_wizard_required(self):
+        self._logger.debug("PrusaConnectBridgePlugin: Checking if wizard is required.")
+        token = self._settings.get(["prusa_connect_token"])
+        if token is None or token == "":
+            self._logger.info("PrusaConnectBridgePlugin: Wizard required because Prusa Connect token is missing.")
+            return True
+        else:
+            self._logger.info("PrusaConnectBridgePlugin: Wizard not required, Prusa Connect token exists.")
+            return False
+
+    def on_wizard_show(self):
+        self._logger.info("PrusaConnectBridgePlugin: Wizard shown.")
+        # Optionally, send current status to pre-populate wizard dynamically if needed beyond get_wizard_details
+        # self._get_prusa_connect_status() # This will send a plugin message
+
+    def on_wizard_finish(self):
+        self._logger.info("PrusaConnectBridgePlugin: Wizard finished.")
+        self._get_prusa_connect_status() # Update status on settings page etc.
+
+    def on_wizard_proceed(self, current_step_id, next_step_id):
+        self._logger.info(f"Wizard proceeding from '{current_step_id}' to '{next_step_id}'.")
+        if current_step_id == "introduction" and next_step_id == "register_prusa_connect":
+            self._logger.info("Proceeding from introduction to registration step. Initiating Prusa Connect registration.")
+            self._initiate_registration()
+        # Other step transitions can be handled here if needed in the future.
+
+    def get_wizard_details(self):
+        self._logger.debug("PrusaConnectBridgePlugin: get_wizard_details called.")
+        sn = self._settings.get(["prusa_connect_sn"])
+        fingerprint = self._settings.get(["prusa_connect_fingerprint"])
+        tmp_code = self._settings.get(["prusa_connect_tmp_code"])
+        token = self._settings.get(["prusa_connect_token"])
+
+        token_display = "Not yet available"
+        if token and len(token) > 8:
+            token_display = f"{token[:4]}...{token[-4:]}"
+        elif token:
+            token_display = "Token is set (short)"
+
+
+        return [
+            {
+                "id": "introduction",
+                "title": "Welcome to Prusa Connect Bridge",
+                "description": "This wizard will guide you through connecting your OctoPrint instance to Prusa Connect. "
+                               "The following identifiers will be used for registration:",
+                "template": "prusaconnectbridge_wizard.jinja2",
+                "data": {
+                    "sn": sn if sn else "Will be generated/retrieved on first run",
+                    "fingerprint": fingerprint if fingerprint else "Will be generated/retrieved on first run",
+                    "next_button_label": "Start Registration Process"
+                }
+            },
+            {
+                "id": "register_prusa_connect",
+                "title": "Register with Prusa Connect",
+                "description": "When you proceed to this step, the plugin will attempt to obtain a temporary code from Prusa Connect. "
+                               "Once displayed, go to <a href='https://connect.prusa3d.com/printers/add' target='_blank'>https://connect.prusa3d.com/printers/add</a> "
+                               "and enter the code. The plugin will automatically attempt to retrieve your printer's token in the background.",
+                "template": "prusaconnectbridge_wizard.jinja2",
+                "data": {
+                    "tmp_code": tmp_code if tmp_code else "Awaiting code...", # Updated initial text
+                    "registration_url": "https://connect.prusa3d.com/printers/add",
+                    "status_message": "Attempting to obtain temporary code...", # This will be updated by plugin messages
+                    "next_button_label": "Next", # This might be hidden/disabled initially by JS based on token status
+                    "finish_button": False
+                }
+            },
+            {
+                "id": "confirmation",
+                "title": "Registration Complete",
+                "description": "Successfully registered with Prusa Connect!",
+                "template": "prusaconnectbridge_wizard.jinja2",
+                "data": {
+                    "token_display": token_display,
+                    "finish_button_label": "Finish",
+                    "next_button": False
+                }
+            }
+        ]
 
 # Plugin registration
 __plugin_name__ = "PrusaConnect-Bridge"
