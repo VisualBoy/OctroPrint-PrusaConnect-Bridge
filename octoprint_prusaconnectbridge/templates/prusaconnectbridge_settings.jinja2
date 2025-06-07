@@ -1,9 +1,34 @@
 <div id="settings_plugin_prusaconnectbridge_content_area">
-    <h4>Prusa Connect Bridge Status</h4>
-    <p>
-        <strong>Serial Number (SN):</strong>
-        <span data-bind="text: settings.plugins.prusaconnectbridge.prusa_connect_sn() ? settings.plugins.prusaconnectbridge.prusa_connect_sn() : 'Not yet generated'"></span>
-    </p>
+    <h4>Prusa Connect Bridge Status & Identifiers</h4>
+    <form class="form-horizontal">
+        <div class="control-group">
+            <label class="control-label" for="pconnect_manual_sn">Manual Serial Number</label>
+            <div class="controls">
+                <input type="text" id="pconnect_manual_sn" name="prusa_connect_manual_sn" class="input-xlarge"
+                       data-bind="value: settings.plugins.prusaconnectbridge.prusa_connect_manual_sn"
+                       placeholder="Leave blank for auto-generated SN">
+                <span class="help-block">
+                    Optionally enter a specific Serial Number. If blank, an automatic SN (see 'Active SN' below) is used.
+                    Changing this after registration may require re-registration (use 'Clear Stored Credentials' button).
+                </span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">Active Serial Number</label>
+            <div class="controls">
+                <span class="uneditable-input input-xlarge" data-bind="text: settings.plugins.prusaconnectbridge.prusa_connect_sn() ? settings.plugins.prusaconnectbridge.prusa_connect_sn() : 'Not set/generated'"></span>
+                <span class="help-block">This is the Serial Number currently used for Prusa Connect registration.</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label">Active Fingerprint</label>
+            <div class="controls">
+                <span class="uneditable-input input-xlarge" data-bind="text: settings.plugins.prusaconnectbridge.prusa_connect_fingerprint() ? settings.plugins.prusaconnectbridge.prusa_connect_fingerprint().substring(0, 10) + '...' : 'Not set/generated'"></span>
+                 <span class="help-block">This is the Fingerprint currently used, derived from the Active SN.</span>
+            </div>
+        </div>
+    </form>
+
     <p>
         <strong>Registration Status:</strong>
         <span data-bind="text: prusaConnectStatusTextForUI"></span>

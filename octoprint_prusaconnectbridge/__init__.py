@@ -53,7 +53,8 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
             prusa_connect_fingerprint=None,
             prusa_connect_token=None,
             prusa_connect_tmp_code=None,
-            prusa_server_url="https://connect.prusa3d.com" # Added
+            prusa_server_url="https://connect.prusa3d.com", # Added
+            prusa_connect_manual_sn=None # Add this line
         )
 
     def on_settings_initialized(self):
@@ -68,49 +69,137 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
     def on_settings_save(self, data):
         self._logger.info("PrusaConnectBridgePlugin: on_settings_save called.")
         old_server_url = self._settings.get(["prusa_server_url"])
+        old_active_sn = self._settings.get(["prusa_connect_sn"]) # Used for registration
 
-        # Important: Let OctoPrint save the settings first
+        # Important: Let OctoPrint save the settings from 'data' first.
+        # This will update prusa_connect_manual_sn and prusa_server_url if they were changed in UI.
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
 
-        # Now retrieve the new value that was just saved by OctoPrint
+        # Retrieve the potentially new server URL
         self.prusa_server = self._settings.get(["prusa_server_url"])
 
+        needs_sdk_reinitialization = False
+        force_reregistration = False # Implies clearing token and tmp_code
+
+        # Check if server URL changed
         if old_server_url != self.prusa_server:
             self._logger.info(f"Prusa Connect server URL changed. Old: '{old_server_url}', New: '{self.prusa_server}'.")
-            self._logger.info("Clearing token and temp code to force re-registration with the new server.")
+            needs_sdk_reinitialization = True
+            force_reregistration = True # Server change always forces re-registration
 
+        # Now, run _initialize_identifiers(). This will:
+        # 1. Consider the new prusa_connect_manual_sn (just saved by OctoPrint).
+        # 2. Determine the new active prusa_connect_sn and prusa_connect_fingerprint.
+        # 3. Save these new active identifiers to settings.
+        new_active_sn, new_fingerprint = self._initialize_identifiers() # This method calls self._settings.save()
+
+        # Check if the active SN changed
+        if old_active_sn != new_active_sn:
+            self._logger.info(f"Active Serial Number changed. Old: '{old_active_sn}', New: '{new_active_sn}'.")
+            needs_sdk_reinitialization = True
+            if self._settings.get(["prusa_connect_token"]): # If already registered
+                self._logger.warning("SN changed while registered. This requires re-registration with Prusa Connect.")
+                force_reregistration = True
+
+        if force_reregistration:
+            self._logger.info("Forcing re-registration: Clearing Prusa Connect token and temporary code.")
             self._settings.set(["prusa_connect_token"], None)
             self._settings.set(["prusa_connect_tmp_code"], None)
-            # No need to call self._settings.save() here if we are in on_settings_save,
-            # OctoPrint handles saving. However, if we want to ensure these specific changes are
-            # immediately persisted and events triggered for these specific keys, saving might be desired.
-            # For now, rely on OctoPrint's save cycle for the main data object.
-            # Re-evaluate if direct save is needed for immediate effect on other components.
+            self._settings.save() # Persist cleared token/tmp_code immediately
 
-            # Update and push status to UI
-            self._get_prusa_connect_status()
+        if needs_sdk_reinitialization:
+            self._logger.info("SDK needs re-initialization due to settings changes.")
 
-            self._logger.warning("A manual 'Clear Settings & Re-Register' or an OctoPrint restart is highly recommended to ensure the SDK fully uses the new server URL and re-initializes correctly.")
-            # Consider how to gracefully restart the SDK components or prompt user.
+            if force_reregistration:
+                # Stop timers if we are about to clear everything for re-registration
+                if self.token_retrieval_timer and self.token_retrieval_timer.is_alive():
+                    self.token_retrieval_timer.cancel()
+                    self.token_retrieval_timer = None
+                    self._logger.info("Token retrieval timer cancelled for SDK re-initialization.")
+                if self.telemetry_timer and self.telemetry_timer.is_alive():
+                    self.telemetry_timer.cancel()
+                    self.telemetry_timer = None
+                    self._logger.info("Telemetry timer cancelled for SDK re-initialization.")
+
+            try:
+                # Get the final SN and Fingerprint that _initialize_identifiers decided upon and saved
+                final_sn_for_sdk = self._settings.get(["prusa_connect_sn"])
+                final_fp_for_sdk = self._settings.get(["prusa_connect_fingerprint"])
+
+                if not final_sn_for_sdk or not final_fp_for_sdk:
+                    self._logger.error("Cannot re-initialize SDK: SN or Fingerprint is missing after _initialize_identifiers.")
+                    raise ValueError("SN or Fingerprint missing, cannot create Printer object.")
+
+                self._logger.info(f"Re-creating Prusa SDK Printer object with SN: {final_sn_for_sdk}, FP: {final_fp_for_sdk[:10]}...")
+                self.prusa_printer = Printer(fingerprint=final_fp_for_sdk, sn=final_sn_for_sdk, printer_type=const.PrinterType.I3MK3)
+                self._logger.info("New Prusa SDK Printer object created.")
+
+                current_token_for_sdk = self._settings.get(["prusa_connect_token"]) # Might be None if force_reregistration
+                self.prusa_printer.set_connection(server_url=self.prusa_server, token=current_token_for_sdk)
+                self._logger.info(f"SDK connection re-configured. Server: {self.prusa_server}, Token: {'Set' if current_token_for_sdk else 'None'}.")
+
+                self._register_sdk_handlers() # Re-register command handlers for the new printer object
+
+                # SDK Thread Management
+                if self.sdk_thread and self.sdk_thread.is_alive():
+                    self._logger.info("Previous SDK thread is alive. A new one will be started. The old one should exit as it's a daemon.")
+                    # Old thread will eventually terminate as its prusa_printer object is no longer referenced here.
+
+                self._logger.info("Starting new SDK loop thread after settings save.")
+                self.sdk_thread = threading.Thread(target=self.prusa_printer.loop, daemon=True, name="PrusaConnectSDKLoop-SettingsSave")
+                self.sdk_thread.start()
+                self._logger.info("New SDK loop thread started.")
+
+                if force_reregistration:
+                    self._logger.info("Re-registration is now required. User may need to use Wizard or 'Clear & Re-register' button if not guided automatically.")
+                    # Future: could call self._initiate_registration() if not in wizard context and no token.
+                    # For now, rely on wizard or manual action if token was cleared.
+                    # Or, if no token, perhaps _initiate_registration could be called here to be more proactive.
+                    # Let's check if a token exists. If not, and we forced re-registration, it means we need one.
+                    if not current_token_for_sdk:
+                        self._logger.info("No token present after forced re-registration, initiating registration process.")
+                        self._initiate_registration()
+
+
+            except Exception as e:
+                self._logger.error(f"Error during SDK re-initialization: {e}", exc_info=True)
+                self._registration_error_message = f"Failed to re-initialize Prusa Connect SDK: {e}. Check logs."
+                # If SDK init fails, it's safer to clear the printer object
+                self.prusa_printer = None
+                if self.telemetry_timer and self.telemetry_timer.is_alive(): self.telemetry_timer.cancel()
+
+
+        # Always update the status display
+        self._get_prusa_connect_status()
 
     ##~~ StartupPlugin mixin
     def _initialize_identifiers(self):
         self._logger.info("Attempting to initialize Prusa Connect identifiers (SN and Fingerprint)...")
         try:
-            sn = self._settings.get(["prusa_connect_sn"])
-            if sn is None:
-                self._logger.info("SN not found in settings, attempting to generate a new one.")
-                if hasattr(self._printer, 'get_firmware_uuid') and self._printer.get_firmware_uuid():
-                    sn = self._printer.get_firmware_uuid()
-                    self._logger.info(f"Using firmware UUID as SN: {sn}")
-                elif self._printer.get_printer_profile().get("serial"):
-                    sn = self._printer.get_printer_profile().get("serial")
-                    self._logger.info(f"Using printer profile serial as SN: {sn}")
+            manual_sn = self._settings.get(["prusa_connect_manual_sn"])
+            sn = None
+
+            if manual_sn: # Check if manual_sn is not None and not empty
+                sn = manual_sn
+                self._logger.info(f"Using manual SN from settings: {sn}")
+            else:
+                sn = self._settings.get(["prusa_connect_sn"])
+                if not sn: # Check if sn is None or empty (it will be None if not set)
+                    self._logger.info("SN not found in settings or manual SN not provided, attempting to generate a new one.")
+                    if hasattr(self._printer, 'get_firmware_uuid') and self._printer.get_firmware_uuid():
+                        sn = self._printer.get_firmware_uuid()
+                        self._logger.info(f"Using firmware UUID as SN: {sn}")
+                    elif self._printer.get_printer_profile().get("serial"):
+                        sn = self._printer.get_printer_profile().get("serial")
+                        self._logger.info(f"Using printer profile serial as SN: {sn}")
+                    else:
+                        sn = str(uuid.uuid4())
+                        self._logger.info(f"Generated new UUID as SN: {sn}")
                 else:
-                    sn = str(uuid.uuid4())
-                    self._logger.info(f"Generated new UUID as SN: {sn}")
-                self._settings.set(["prusa_connect_sn"], sn)
-                self._settings.save() # Persist the new SN
+                    self._logger.info(f"Using existing SN from settings: {sn}")
+
+            # Save the determined SN back to prusa_connect_sn for consistency
+            self._settings.set(["prusa_connect_sn"], sn)
 
             fingerprint = self._settings.get(["prusa_connect_fingerprint"])
             calculated_fingerprint = hashlib.sha256(sn.encode('utf-8')).hexdigest()
@@ -118,8 +207,9 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
             if fingerprint != calculated_fingerprint:
                 self._logger.info(f"Fingerprint mismatch or not set. Current: '{fingerprint}', Calculated: '{calculated_fingerprint}'. Updating fingerprint.")
                 self._settings.set(["prusa_connect_fingerprint"], calculated_fingerprint)
-                self._settings.save() # Persist the new fingerprint
                 fingerprint = calculated_fingerprint
+
+            self._settings.save() # Persist any changes to SN or fingerprint
 
             self._logger.info(f"Identifiers initialized. SN: {sn}, Fingerprint: {fingerprint[:10]}...")
             return sn, fingerprint
@@ -638,6 +728,8 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         current_status_text = self._get_prusa_connect_status() # Ensures status is evaluated and pushed
         return dict(
             prusa_connect_sn=self._settings.get(["prusa_connect_sn"]),
+            prusa_connect_manual_sn=self._settings.get(["prusa_connect_manual_sn"]),
+            prusa_connect_fingerprint=self._settings.get(["prusa_connect_fingerprint"]),
             prusa_connect_status_text=current_status_text,
             prusa_server_url=self._settings.get(["prusa_server_url"])
         )
@@ -755,6 +847,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
             self._settings.set(["prusa_connect_fingerprint"], None)
             self._settings.set(["prusa_connect_token"], None)
             self._settings.set(["prusa_connect_tmp_code"], None)
+            self._settings.set(["prusa_connect_manual_sn"], None) # Clear manual SN as well
             # Server URL is kept as it's user-configurable separately.
             self._settings.save(trigger_event=True) # Save changes and trigger event for UI updates
 
@@ -882,10 +975,30 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         self._logger.info("PrusaConnectBridgePlugin: Wizard finished.")
         self._get_prusa_connect_status() # Update status on settings page etc.
 
-    def on_wizard_proceed(self, current_step_id, next_step_id):
+    def on_wizard_proceed(self, current_step_id, next_step_id, data=None): # Added data=None for safety, though base class provides it
         self._logger.info(f"Wizard proceeding from '{current_step_id}' to '{next_step_id}'.")
-        if current_step_id == "introduction" and next_step_id == "register_prusa_connect":
-            self._logger.info("Proceeding from introduction to registration step. Initiating Prusa Connect registration.")
+
+        if current_step_id == "introduction" and next_step_id == "collect_sn_input":
+            self._logger.info("Proceeding from introduction to SN collection step.")
+            # No specific action needed here, wizard will display the next page.
+        elif current_step_id == "collect_sn_input" and next_step_id == "register_prusa_connect":
+            self._logger.info("Proceeding from SN collection to registration step.")
+            manual_sn = data.get("manual_serial_number") if data else None
+
+            if manual_sn: # Check if manual_sn is not None and not an empty string
+                self._logger.info(f"User provided manual SN: {manual_sn}")
+                self._settings.set(["prusa_connect_manual_sn"], manual_sn)
+            else:
+                self._logger.info("User did not provide manual SN, or it was empty. Clearing any existing manual SN setting.")
+                self._settings.set(["prusa_connect_manual_sn"], None) # Ensure it's None if empty or not provided
+
+            self._settings.save()
+            self._logger.info("Manual SN (or lack thereof) saved to settings.")
+
+            self._logger.info("Re-initializing identifiers based on wizard input before Prusa Connect registration.")
+            self._initialize_identifiers() # This will use manual_sn if set, or generate/use existing, and save all SN/FP.
+
+            self._logger.info("Identifiers re-initialized. Initiating Prusa Connect registration.")
             self._initiate_registration()
         # Other step transitions can be handled here if needed in the future.
 
@@ -913,7 +1026,18 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                 "data": {
                     "sn": sn if sn else "Will be generated/retrieved on first run",
                     "fingerprint": fingerprint if fingerprint else "Will be generated/retrieved on first run",
-                    "next_button_label": "Start Registration Process"
+                    "next_button_label": "Configure Serial Number"
+                }
+            },
+            {
+                "id": "collect_sn_input",
+                "title": "Serial Number Configuration",
+                "description": "You can optionally provide a specific Serial Number (SN) for your printer to use with Prusa Connect. This is useful if you have an Original Prusa printer or need to use a pre-assigned SN. If you leave this field blank, a unique ID will be automatically generated.",
+                "template": "prusaconnectbridge_wizard.jinja2",
+                "data": {
+                    "manual_sn_value": self._settings.get(["prusa_connect_manual_sn"]),
+                    "next_button_label": "Continue to Registration",
+                    "finish_button": False
                 }
             },
             {
