@@ -1,6 +1,10 @@
 <div align="center">
 
-# <img src="https://www.prusa3d.com/wp-content/themes/prusa3d/assets/images/prusa-logo.svg" height="50"> OctoPrint-PrusaConnect-Bridge (Unofficial)
+<img src="assets\img\plugins\PrusaConnect-Bridge\OctoPrint-PrusaConnect-Bridge_logo.png" height="200"> 
+
+<br>
+
+# Octoprint PrusaConnect Bridge (Unofficial)
 
 A bridge plugin to connect <strong>OctoPrint</strong> with <strong>Prusa Connect</strong>, enabling seamless remote monitoring and control of your printer.
 
