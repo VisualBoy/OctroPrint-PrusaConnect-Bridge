@@ -1,7 +1,7 @@
 ---
 layout: plugin
 id: PrusaConnect-Bridge
-title:  Live G-Code Control
+title:  PrusaConnect Bridge
 description: Allows real-time G-code stream manipulation by matching user-defined patterns (e.g., regex) against outgoing commands to conditionally modify, skip, or inject G-code.
 
 authors:
@@ -9,7 +9,7 @@ authors:
 
 license: MIT License
 
-date: 2025-06-03 #
+date: 2025-06-07 #
 
 homepage: https://github.com/VisualBoy/OctoPrint-PrusaConnect-Bridge
 source: https://github.com/VisualBoy/OctoPrint-PrusaConnect-Bridge
@@ -25,14 +25,7 @@ follow_dependency_links: false
 tags:
 - gcode
 - control
-- regex
-- live control
-- automation
-- gcode manipulation
-- interface
-- tool
-- live
-- override
+- // TO-DO
 
 screenshots:
 - url: /assets/img/plugins/PrusaConnect-Bridge/screenshot1.png
@@ -71,43 +64,25 @@ compatibility:
 
 ## 🔧 OctoPrint-PrusaConnect-Bridge
 
-**Live G-Code Control** is an 🐙 **OctoPrint** plugin designed to provide fine-grained, real-time control over the G-code stream sent to your 3D printer.
+**PrusaConnect Bridge** is an 🐙 **OctoPrint** plugin designed to... // TO-DO
 
 ### ✨ Features
 
-Users can define a set of rules, each consisting of a **pattern (regular expression)** and an **action**. As each G-code command is processed, the plugin matches it against your defined patterns. If a pattern matches, the plugin can perform one of the following actions:
+// TO-DO
 
-- 🔄 **Modify:** Alter the current G-code command (e.g., change a parameter's value).
-- 🚫 **Skip/Suppress:** Prevent the current G-code command from being sent.
-- ➕ **Inject Before:** Insert custom G-code commands immediately before the matched command.
-- ➕ **Inject After:** Insert custom G-code commands immediately after the matched command.
-- 🔁 **Replace:** Substitute the current G-code command with custom G-code commands.
-
-This enables dynamic and conditional manipulation of the G-code stream based on its content, including slicer-generated comments (e.g., `;TYPE:Bridge`, `;LAYER_CHANGE`).
 
 ### 🧪 Example Use Cases
 
-- 🌬️ **Dynamic Fan Control:** Automatically set fan speed to 100% when a line containing `;TYPE:Bridge` is detected, and revert to a lower speed when the bridge section is complete.
-- 🧼 **Conditional G-code Injection:** Inject custom G-code commands before or after specific standard commands (e.g., add a custom nozzle wipe routine before `M600` filament change).
-- 🔄 **Command Remapping/Filtering:** Change or filter out specific G-code commands on the fly.
-- 🧪 **Experimentation:** Test G-code variations or inject diagnostic commands without re-slicing your model.
+// TO-DO
 
 ### ⚙️ Configuration
 
 The plugin provides a settings interface within OctoPrint where you can:
-* Create, edit, and delete rules.
-* Define the regex pattern for each rule. This uses standard Python regex syntax.
-* Select the action type (Modify, Skip, Inject Before/After, Replace).
-* Specify the G-code command(s) for actions that involve injection or replacement.
-* Enable or disable individual rules.
-* Control the order of rule evaluation.
+
+// TO-DO
 
 > ⚠️ It is recommended to have a basic understanding of G-code and regular expressions to use this plugin effectively. Test rules in a safe environment before relying on them for critical prints.
 
 ### 📌 Important Notes
 
-* 🧩 This plugin works by intercepting G-code commands via OctoPrint's `octoprint.comm.protocol.gcode.queuing` hook. This allows for robust modification of the command stream before it is sent to the printer.
-* ⚠️  While powerful, misconfiguration of rules could lead to unexpected printer behavior. Please use with caution and test your rules thoroughly.
-* ⚠️  The effectiveness of matching comments depends on your slicer generating those comments in the G-code file.
-* ➕  This plugin adds a new tab to the OctoPrint interface for managing rules. Screenshots provided showcase this interface.
-```
+// TO-DO
