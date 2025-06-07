@@ -4,10 +4,12 @@ An OctoPrint plugin that acts as a bridge to Prusa Connect, allowing you to moni
 
 ## Features
 
-*   [Feature 1: Briefly describe the main feature, e.g., Real-time printer status monitoring via Prusa Connect]
-*   [Feature 2: Describe another key feature, e.g., Remote print start/stop/pause capabilities]
-*   [Feature 3: Add if applicable, e.g., G-code file management and transfer]
-*   (Add more features as applicable)
+*   Real-time printer status monitoring via Prusa Connect (e.g., temperatures, print progress).
+*   Remote print control (start, stop, pause, resume) from the Prusa Connect interface.
+*   View printer webcam stream in Prusa Connect.
+*   File listing and print initiation from files stored in OctoPrint, accessible via Prusa Connect.
+*   Secure communication with Prusa Connect servers.
+*   Easy setup and configuration within OctoPrint.
 
 ## Setup
 
@@ -33,7 +35,7 @@ An OctoPrint plugin that acts as a bridge to Prusa Connect, allowing you to moni
     *   Alternatively, clone the repository into your OctoPrint plugins directory:
         ```bash
         cd ~/.octoprint/plugins
-        git clone <repository_url> OctoPrint-PrusaConnect-Bridge
+        git clone https://github.com/VisualBoy/PrusaConnect-Bridge.git OctoPrint-PrusaConnect-Bridge
         ```
     *   Restart OctoPrint.
 
@@ -42,11 +44,10 @@ An OctoPrint plugin that acts as a bridge to Prusa Connect, allowing you to moni
 1.  **Configuration**
     *   After installation, open OctoPrint settings.
     *   Navigate to "PrusaConnect Bridge" under the "Plugins" section.
-    *   [Detail configuration steps, e.g., Enter your Prusa Connect API key/token].
+    *   Follow the on-screen wizard after installation to register your OctoPrint instance with Prusa Connect. This will involve obtaining a temporary code from the plugin and entering it on the Prusa Connect website.
     *   Save settings.
 2.  **Monitoring and Control**
-    *   [Explain how to use the plugin, e.g., Access your printer via the Prusa Connect portal or app].
-    *   [Describe any specific UI elements or workflows within OctoPrint or Prusa Connect related to this plugin].
+    *   Once configured, your printer will appear in your Prusa Connect account (web or app). You can monitor its status, control prints, and view its webcam stream directly from the Prusa Connect interface.
 
 ## Troubleshooting
 

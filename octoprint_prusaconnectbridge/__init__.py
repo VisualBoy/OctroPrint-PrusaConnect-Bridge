@@ -33,8 +33,6 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         # Initialize the logger
         self._logger = logging.getLogger("octoprint.plugins.PrusaConnectBridge")
         self._logger.info("PrusaConnectBridgePlugin: Initializing...")
-        self.active_rules = [] # Initialize active_rules
-        self.last_matched_rule_pattern = None # Initialize last matched rule pattern
         self.prusa_printer = None
         # self.prusa_printer_thread = None # Unused, sdk_thread is used
         self.sdk_thread = None
@@ -51,7 +49,6 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
 
     def get_settings_defaults(self):
         return dict(
-            rules=[],  # Default empty list for rules
             prusa_connect_sn=None,
             prusa_connect_fingerprint=None,
             prusa_connect_token=None,
@@ -61,10 +58,6 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
 
     def on_settings_initialized(self):
         self._logger.info("PrusaConnectBridgePlugin: Settings initialized.")
-        self.active_rules = self._settings.get(["rules"])
-        if self.active_rules is None:
-            self.active_rules = []
-        self._logger.info(f"PrusaConnectBridgePlugin: Loaded {len(self.active_rules)} rules.")
 
         self.prusa_server = self._settings.get(["prusa_server_url"]) # Load server URL
         self.last_status_sent_to_ui = "" # Initialize for status pushing
@@ -81,11 +74,6 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
 
         # Now retrieve the new value that was just saved by OctoPrint
         self.prusa_server = self._settings.get(["prusa_server_url"])
-
-        self.active_rules = self._settings.get(["rules"]) # Reload rules as well
-        if self.active_rules is None:
-            self.active_rules = []
-        self._logger.info(f"PrusaConnectBridgePlugin: Settings saved, {len(self.active_rules)} rules reloaded.")
 
         if old_server_url != self.prusa_server:
             self._logger.info(f"Prusa Connect server URL changed. Old: '{old_server_url}', New: '{self.prusa_server}'.")
@@ -849,83 +837,6 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
             self._logger.error(f"Error processing OctoPrint event '{event}' for Prusa Connect: {e}", exc_info=True)
 
 
-    ##~~ G-code queuing hook
-    def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
-        if not gcode:
-            return cmd
-
-        # G-code hook logic is related to a different feature (G-code manipulation based on rules)
-        # and is assumed to be correct from previous context.
-        # For this step, ensure any self.active_rules access is safe if rules can be None initially.
-        if not self.active_rules: # Add a guard if active_rules might not be initialized
-            return cmd
-
-        for rule in self.active_rules:
-            if not rule.get("enabled"):
-                continue
-
-            pattern_str = rule.get("pattern")
-            if not pattern_str:
-                continue
-
-            try:
-                regex = re.compile(pattern_str)
-                match = regex.search(gcode)
-
-                if match:
-                    self._logger.info(f"PrusaConnectBridgePlugin: Rule '{pattern_str}' matched G-code: {gcode}")
-                    action_type = rule.get("actionType", "").lower()
-                    action_gcode_str = rule.get("actionGcode", "")
-
-                    # Split action_gcode_str into individual commands, filtering out empty lines
-                    action_gcode_lines = [line for line in action_gcode_str.splitlines() if line.strip()]
-
-                    self._logger.info(f"PrusaConnectBridgePlugin: Action '{action_type}' with G-code(s): {action_gcode_lines}")
-
-                    # Store the pattern of the matched rule
-                    self.last_matched_rule_pattern = pattern_str
-
-                    if action_type == "skip" or action_type == "skip/suppress":
-                        self._logger.info(f"PrusaConnectBridgePlugin: Suppressing G-code: {gcode}")
-                        return None  # Suppress the command
-
-                    elif action_type == "inject_before":
-                        commands_to_send = action_gcode_lines + [cmd]
-                        self._logger.info(f"PrusaConnectBridgePlugin: Injecting before, sending: {commands_to_send}")
-                        return commands_to_send
-
-                    elif action_type == "inject_after":
-                        commands_to_send = [cmd] + action_gcode_lines
-                        self._logger.info(f"PrusaConnectBridgePlugin: Injecting after, sending: {commands_to_send}")
-                        return commands_to_send
-
-                    elif action_type == "replace" or action_type == "modify": # Modify treated as Replace for now
-                        if not action_gcode_lines: # If action G-code is empty, effectively skip
-                            self._logger.info(f"PrusaConnectBridgePlugin: Replacing with empty, effectively suppressing G-code: {gcode}")
-                            return None
-                        self._logger.info(f"PrusaConnectBridgePlugin: Replacing G-code '{gcode}' with: {action_gcode_lines}")
-                        return action_gcode_lines
-
-                    else:
-                        self._logger.warning(f"PrusaConnectBridgePlugin: Unknown action type '{action_type}' for rule '{pattern_str}'. Passing original command.")
-                        # Even if action is unknown, a rule matched. Storing its pattern.
-                        # self.last_matched_rule_pattern is already set above.
-                        return cmd
-
-                    # If a rule matched and an action was taken (or attempted), stop processing further rules for this G-code line.
-                    # The return statements above handle this for specific actions.
-                    # If an unknown action type occurs, we fall through and return original cmd, but ideally, we should break here too.
-                    # However, since all known actions return, this break is implicitly handled for them.
-                    # break # This break is now effectively handled by returns in each action block
-
-            except re.error as e:
-                self._logger.error(f"PrusaConnectBridgePlugin: Invalid regex pattern '{pattern_str}': {e}")
-            except Exception as e_gen:
-                self._logger.error(f"PrusaConnectBridgePlugin: Error processing rule '{pattern_str}' for G-code '{gcode}': {e_gen}")
-
-        return cmd # Return the original command if no rules matched or no action taken
-
-
     ##~~ Softwareupdate hook
 
     def get_update_information(self):
@@ -940,7 +851,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                 # version check: github repository
                 type="github_release",
                 user="VisualBoy", # Update with your GitHub username
-                repo="OctoPrint-PrusaConnect-Bridge",
+                repo="PrusaConnect-Bridge",
                 current=self._plugin_version,
 
                 # update method: pip
@@ -1035,7 +946,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
 
 # Plugin registration
 __plugin_name__ = "PrusaConnect-Bridge"
-__plugin_version__ = "0.1.0"
+__plugin_version__ = "0.1.1"
 __plugin_description__ = "OctoPrint plugin bridge to Prusa Connect (unofficial)."
 __plugin_pythoncompat__ = ">=3,<4" # Python 3 compatibility
 
@@ -1047,7 +958,6 @@ def __plugin_load__():
 
     global __plugin_hooks__
     __plugin_hooks__ = {
-        "octoprint.comm.protocol.gcode.queuing": __plugin_implementation__.hook_gcode_queuing,
         "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
         "octoprint.plugin.settings.initialized": __plugin_implementation__.on_settings_initialized # Add this hook
     }
