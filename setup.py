@@ -10,7 +10,7 @@ plugin_version = "0.1.0"
 plugin_description = "A plugin for real-time G-code stream manipulation based on user-defined rules."
 plugin_author = "GlitchLab.xyz"
 plugin_author_email = "contact@glitchlab.xyz"
-plugin_url = "https://github.com/VisualBoy/OctoPrint-PrusaConnect-Bridge"
+plugin_url = "https://github.com/VisualBoy/PrusaConnect-Bridge"
 plugin_license = "MIT"
 plugin_additional_data = []
 
@@ -52,7 +52,7 @@ def params():
 	# If this plugin have any package data that needs to be accessible on the file system, such as templates or static assets, thien plugin will not be	zip_safe
 	zip_safe = True
  
-	# No specific requirements for now
+	# Rrequirements:
 	install_requires = ["prusa-connect-sdk-printer>=0.5.0,<0.6.0"]
 
 	# Hook the plugin into the "octoprint.plugin" entry point, mapping the plugin_identifier to the plugin_package.
