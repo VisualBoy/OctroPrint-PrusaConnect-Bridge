@@ -1,0 +1,39 @@
+<div class="prusaconnectbridge_wizard">
+    <!-- Title and Description are typically handled by the wizard framework based on get_wizard_details -->
+    <!-- wizard_title and wizard_description should be available -->
+
+    {% if step_id == 'introduction' %}
+        <p>Your OctoPrint instance needs to be identified to Prusa Connect. The following identifiers will be used. If they are not yet set, they will be generated or retrieved when you start the registration process.</p>
+        <p>Serial Number (SN): <strong data-bind="text: فعالsn_display">{{ data.sn }}</strong></p>
+        <p>Fingerprint: <strong data-bind="text: فعالfingerprint_display">{{ data.fingerprint }}</strong></p>
+        <p class="text-muted small">You can change these identifiers later in the Prusa Connect Bridge plugin settings if needed, but this usually requires re-registration.</p>
+    {% elif step_id == 'register_prusa_connect' %}
+        <p>
+            To connect your printer to Prusa Connect, please click the link below to open the Prusa Connect website.
+            You will be asked to enter a temporary code.
+        </p>
+        <p>
+            <a data-bind="attr: { href: ko_registration_url }" href="{{ data.registration_url }}" target="_blank" class="btn btn-primary">Open Prusa Connect Registration Page</a>
+        </p>
+        <hr>
+        <p>Enter this temporary code on the Prusa Connect page:</p>
+        <div class="text-center">
+            <h3 style="font-size: 2.5em; letter-spacing: 2px; padding: 10px; border: 1px dashed #ccc; background-color: #f9f9f9; display: inline-block;">
+                <strong data-bind="text: ko_tmp_code_display">{{ data.tmp_code }}</strong>
+            </h3>
+        </div>
+        <p data-bind="text: ko_wizard_status_message_display, css: { 'text-success': registration_complete, 'text-warning': registration_error, 'text-info': !registration_complete() && !registration_error() }">{{ data.status_message }}</p>
+        <p class="text-muted small">
+            Once you enter the code on the Prusa Connect website, this plugin will attempt to automatically detect the successful registration and retrieve a permanent token.
+            This step may automatically proceed once the token is detected. If you have entered the code and nothing happens after a minute, you can try clicking 'Next'.
+        </p>
+    {% elif step_id == 'confirmation' %}
+        <p>Your OctoPrint instance has been successfully registered with Prusa Connect.</p>
+        <p>Prusa Connect Token: <strong data-bind="text: ko_token_partial_display">{{ data.token_display }}</strong></p>
+        <p class="text-muted small">This token is stored securely in your OctoPrint settings. You can now close this wizard.</p>
+    {% endif %}
+
+    <!-- Standard wizard buttons are usually rendered by OctoPrint's wizard framework
+         using wizard_buttons which is populated based on 'next_button_label',
+         'finish_button_label', 'next_button', 'finish_button' from get_wizard_details -->
+</div>
