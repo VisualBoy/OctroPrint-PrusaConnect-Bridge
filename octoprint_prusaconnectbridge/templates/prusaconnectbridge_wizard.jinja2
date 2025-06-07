@@ -7,6 +7,23 @@
         <p>Serial Number (SN): <strong data-bind="text: فعالsn_display">{{ data.sn }}</strong></p>
         <p>Fingerprint: <strong data-bind="text: فعالfingerprint_display">{{ data.fingerprint }}</strong></p>
         <p class="text-muted small">You can change these identifiers later in the Prusa Connect Bridge plugin settings if needed, but this usually requires re-registration.</p>
+    {% elif step_id == 'collect_sn_input' %}
+        <p>{{ data.description }}</p> {# Description from get_wizard_details #}
+        <form class="form-horizontal"> {# Standard OctoPrint wizard form styling #}
+            <div class="control-group">
+                <label class="control-label" for="wizard_manual_sn">Manual Serial Number (Optional)</label>
+                <div class="controls">
+                    <input type="text" id="wizard_manual_sn" name="manual_serial_number" class="input-xlarge"
+                           data-bind="value: ko_manual_sn_value"
+                           placeholder="Leave blank for auto-generation">
+                </div>
+            </div>
+        </form>
+        <p class="text-muted small">
+            If you provide a serial number, it will be used to register with Prusa Connect.
+            If left blank, the plugin will attempt to use a system-generated UUID or other available unique identifiers.
+            You can change this later in the plugin settings.
+        </p>
     {% elif step_id == 'register_prusa_connect' %}
         <p>
             To connect your printer to Prusa Connect, please click the link below to open the Prusa Connect website.
