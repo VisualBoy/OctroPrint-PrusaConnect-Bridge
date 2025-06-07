@@ -1,72 +1,117 @@
-# OctoPrint-PrusaConnect-Bridge (Unofficial)
+<div align="center">
 
-An OctoPrint plugin that acts as a bridge to Prusa Connect, allowing you to monitor and control your ika via the Prusa Connect interface.
+# <img src="https://www.prusa3d.com/wp-content/themes/prusa3d/assets/images/prusa-logo.svg" height="50"> OctoPrint-PrusaConnect-Bridge (Unofficial)
 
-## Features
+A bridge plugin to connect <strong>OctoPrint</strong> with <strong>Prusa Connect</strong>, enabling seamless remote monitoring and control of your printer.
 
-*   Real-time printer status monitoring via Prusa Connect (e.g., temperatures, print progress).
-*   Remote print control (start, stop, pause, resume) from the Prusa Connect interface.
-*   View printer webcam stream in Prusa Connect.
-*   File listing and print initiation from files stored in OctoPrint, accessible via Prusa Connect.
-*   Secure communication with Prusa Connect servers.
-*   Easy setup and configuration within OctoPrint.
+<br>
 
-## Setup
+![OctoPrint](https://img.shields.io/badge/Platform-OctoPrint-orange?style=for-the-badge\&logo=octoprint\&logoColor=white)
+![Prusa Connect](https://img.shields.io/badge/Bridge-Prusa%20Connect-ff6f00?style=for-the-badge\&logo=3d\&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-ff6f00.svg?style=for-the-badge)
 
-### Prerequisites
+</div>
 
-*   OctoPrint (version X.Y.Z or later)
-*   [Any other prerequisites, e.g., A Prusa Account]
+---
 
-### Installation
+## 🔧 Features
 
-1.  **Via Plugin Manager (Recommended)**
-    *   Open OctoPrint settings.
-    *   Go to the "Plugin Manager".
-    *   Click "Get More...".
-    *   Search for "PrusaConnect Bridge".
-    *   Click "Install".
-2.  **Manual Installation**
-    *   Download the plugin repository as a ZIP file.
-    *   In OctoPrint settings, go to "Plugin Manager".
-    *   Click "Get More...".
-    *   Under "...or upload a file from your computer", click "Browse..." and select the downloaded ZIP file.
-    *   Click "Install".
-    *   Alternatively, clone the repository into your OctoPrint plugins directory:
-        ```bash
-        cd ~/.octoprint/plugins
-        git clone https://github.com/VisualBoy/PrusaConnect-Bridge.git OctoPrint-PrusaConnect-Bridge
-        ```
-    *   Restart OctoPrint.
+* ⏳ Real-time printer status monitoring via Prusa Connect (temperatures, progress, etc.).
+* ✈️ Remote print control: start, stop, pause, resume.
+* 📽️ Webcam stream viewable in Prusa Connect.
+* 📂 Browse and print files from OctoPrint through Prusa Connect.
+* 🔐 Secure communication with Prusa servers.
+* 🔧 Easy setup directly within OctoPrint.
 
-## Usage
+---
 
-1.  **Configuration**
-    *   After installation, open OctoPrint settings.
-    *   Navigate to "PrusaConnect Bridge" under the "Plugins" section.
-    *   Follow the on-screen wizard after installation to register your OctoPrint instance with Prusa Connect. This will involve obtaining a temporary code from the plugin and entering it on the Prusa Connect website.
-    *   Save settings.
-2.  **Monitoring and Control**
-    *   Once configured, your printer will appear in your Prusa Connect account (web or app). You can monitor its status, control prints, and view its webcam stream directly from the Prusa Connect interface.
+## 🚀 Quick Setup
 
-## Troubleshooting
+### 🔍 Prerequisites
 
-*   [Common issue 1 and its solution]
-*   [Common issue 2 and its solution]
+* OctoPrint (version X.Y.Z or later)
+* Valid Prusa Account (for Prusa Connect)
 
-## Contributing
+### 🚚 Installation
 
-Contributions are welcome! If you'd like to contribute, please:
+#### ✅ Plugin Manager (Recommended)
 
-1.  Fork the repository.
-2.  Create a new branch for your feature or bug fix (`git checkout -b feature/your-feature-name` or `bugfix/your-bug-fix`).
-3.  Make your changes.
-4.  Add tests for your changes (if applicable).
-5.  Ensure your code follows the project's coding style.
-6.  Commit your changes (`git commit -am 'Add some feature'`).
-7.  Push to the branch (`git push origin feature/your-feature-name`).
-8.  Create a new Pull Request.
+1. Open OctoPrint Settings
+2. Navigate to "Plugin Manager"
+3. Click on **Get More...**
+4. Search for `PrusaConnect Bridge`
+5. Click **Install**
 
-## License
+#### 📁 Manual Installation
 
-This project is licensed under the terms of the [MIT License](LICENSE).
+```bash
+cd ~/.octoprint/plugins
+git clone https://github.com/VisualBoy/PrusaConnect-Bridge.git OctoPrint-PrusaConnect-Bridge
+```
+
+Or download the ZIP and install via Plugin Manager:
+
+* Open OctoPrint Settings > Plugin Manager
+* Click **Get More...** > **Upload from file** > Browse to the ZIP
+* Click **Install**, then restart OctoPrint
+
+---
+
+## 🔄 Usage Guide
+
+### 🔢 Configuration
+
+1. Go to **OctoPrint Settings > PrusaConnect Bridge**
+2. Follow the registration wizard to link your OctoPrint instance to your Prusa Connect account
+3. Enter the temporary code on [connect.prusa3d.com](https://connect.prusa3d.com)
+4. Save configuration settings
+
+### 📊 Monitoring & Control
+
+* Once connected, your printer will show up in your Prusa Connect dashboard
+* Monitor temperatures, control print jobs, and access webcam
+* Fully functional from both web and mobile Prusa Connect interfaces
+
+---
+
+## ⚠️ Troubleshooting
+
+| Issue                                | Solution                                                  |
+| ------------------------------------ | --------------------------------------------------------- |
+| Printer not visible in Prusa Connect | Ensure registration is complete and the plugin is enabled |
+| Webcam not showing                   | Check OctoPrint webcam settings and network access        |
+
+> For more help, check the [Issues](https://github.com/VisualBoy/PrusaConnect-Bridge/issues) tab or join the community.
+
+---
+
+## 🎨 Contributing
+
+Contributions are welcome! To get started:
+
+1. Fork the repository
+2. Create a new branch:
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. Make your changes and commit:
+
+   ```bash
+   git commit -am 'Add some feature'
+   ```
+4. Push and open a Pull Request
+
+> Please follow the existing code style and add tests when relevant.
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+<div align="center">
+  <sub>Unofficial community project | Not affiliated with Prusa Research</sub>
+</div>
