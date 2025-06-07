@@ -281,353 +281,179 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
 
         self._logger.info("Registering Prusa Connect SDK command handlers...")
         try:
-            self.prusa_printer.add_handler(const.Command.START_PRINT, self._handle_start_print)
-        self.prusa_printer.add_handler(const.Command.STOP_PRINT, self._handle_stop_print)
-        self.prusa_printer.add_handler(const.Command.PAUSE_PRINT, self._handle_pause_print)
-        self.prusa_printer.add_handler(const.Command.RESUME_PRINT, self._handle_resume_print)
-        self.prusa_printer.add_handler(const.Command.SEND_INFO, self._handle_send_info)
-            # self.prusa_printer.add_handler(const.Command.SET_TARGET_NOZZLE, self._handle_set_target_nozzle)
-            # self.prusa_printer.add_handler(const.Command.SET_TARGET_BED, self._handle_set_target_bed)
-            self._logger.info("Successfully registered Prusa Connect SDK command handlers.")
-        except Exception as e:
-            self._logger.error(f"Error registering SDK command handlers: {e}", exc_info=True)
+            @self.prusa_printer.handler(const.Command.START_PRINT)
+            def decorated_handle_start_print(args):
+                self._logger.info(f"Prusa Connect Command (Decorated): START_PRINT with args: {args}")
+                filename = None
+                if isinstance(args, list) and len(args) > 0:
+                    filename = args[0]
+                elif isinstance(args, str):
+                    filename = args
 
+                if not filename or not isinstance(filename, str):
+                    self._logger.error("START_PRINT: Filename not provided or invalid.")
+                    self.prusa_printer.event_cb(const.Event.COMMAND_REJECTED, const.Source.PLUGIN, command=const.Command.START_PRINT, reason="Missing filename")
+                    return {"source": const.Source.PLUGIN, "error": "Missing filename"}
 
-    # --- Command Handlers ---
-    def _handle_send_info(self, args=None):
-        self._logger.info(f"Handling SEND_INFO command from Prusa Connect. Args: {args}")
-        try:
-            if not self.prusa_printer or not self.prusa_printer.fs:
-                self._logger.error("Filesystem object (self.prusa_printer.fs) not available.", exc_info=True)
-                return {"error": "Filesystem not initialized", "source": const.Source.WUI}
+                try:
+                    if not self._file_manager.file_exists("local", filename):
+                        self._logger.error(f"START_PRINT: File '{filename}' not found in local storage via file_manager.")
+                        self.prusa_printer.event_cb(const.Event.COMMAND_REJECTED, const.Source.PLUGIN, command=const.Command.START_PRINT, reason=f"File '{filename}' not found")
+                        return {"source": const.Source.PLUGIN, "error": f"File '{filename}' not found"}
 
-            octoprint_files_data = self._file_manager.list_files(recursive=True, locations=['local'])
+                    path_to_file = self._file_manager.path_on_disk("local", filename)
+                    if not path_to_file:
+                        self._logger.error(f"START_PRINT: Could not get disk path for supposedly existing file '{filename}'.")
+                        # This case should ideally be caught by file_exists, but as a fallback:
+                        self.prusa_printer.event_cb(const.Event.COMMAND_REJECTED, const.Source.PLUGIN, command=const.Command.START_PRINT, reason=f"Could not get disk path for {filename}")
+                        return {"source": const.Source.PLUGIN, "error": f"Could not get disk path for {filename}"}
 
-            if self.prusa_printer.fs.root:
-                self.prusa_printer.fs.root.children.clear()
-            else:
-                self._logger.error("Prusa printer FS root is None, cannot clear or build tree.", exc_info=True) # Should not happen if fs object exists
-                return {"error": "FS root is None", "source": const.Source.WUI}
+                    self._logger.info(f"Attempting to select and print file: {path_to_file}")
+                    self._printer.select_file(path_to_file, printAfterSelect=True)
+                    self.prusa_printer.set_state(const.State.PRINTING)
+                    self._logger.info(f"Successfully initiated print for {filename}")
+                    return {"source": const.Source.PLUGIN}
+                except Exception as e:
+                    self._logger.error(f"Error handling START_PRINT for {filename}: {e}", exc_info=True)
+                    self.prusa_printer.event_cb(const.Event.COMMAND_FAILED, const.Source.PLUGIN, command=const.Command.START_PRINT, reason=str(e))
+                    return {"source": const.Source.PLUGIN, "error": str(e)}
 
-            def build_fs_tree(octo_files_dict, parent_node):
-                for name, item_data in octo_files_dict.items():
-                    node_type = None
-                    if item_data["type"] == "folder":
-                        node_type = NodeType.DIR
-                    elif item_data["type"] == "machinecode":
-                        node_type = NodeType.FILE
+            @self.prusa_printer.handler(const.Command.STOP_PRINT)
+            def decorated_handle_stop_print(args=None):
+                self._logger.info(f"Prusa Connect Command (Decorated): STOP_PRINT. Args: {args}")
+                try:
+                    self._printer.cancel_print()
+                    self.prusa_printer.set_state(const.State.READY)
+                    self._logger.info("Print cancelled successfully via Prusa Connect command (Decorated).")
+                    return {"source": const.Source.PLUGIN}
+                except Exception as e:
+                    self._logger.error(f"Error handling STOP_PRINT (Decorated): {e}", exc_info=True)
+                    self.prusa_printer.event_cb(const.Event.COMMAND_FAILED, const.Source.PLUGIN, command=const.Command.STOP_PRINT, reason=str(e))
+                    return {"source": const.Source.PLUGIN, "error": str(e)}
+
+            @self.prusa_printer.handler(const.Command.PAUSE_PRINT)
+            def decorated_handle_pause_print(args=None):
+                self._logger.info(f"Prusa Connect Command (Decorated): PAUSE_PRINT. Args: {args}")
+                try:
+                    if self._printer.is_printing() and not self._printer.is_paused():
+                        self._printer.pause_print()
+                        self.prusa_printer.set_state(const.State.PAUSED)
+                        self._logger.info("Print paused successfully via Prusa Connect command (Decorated).")
+                    elif self._printer.is_paused():
+                        self._logger.info("Print is already paused. No action taken (Decorated).")
                     else:
-                        self._logger.debug(f"Skipping item '{name}' of type '{item_data['type']}'")
-                        continue  # Skip other types
+                        self._logger.warning("Cannot pause: Printer is not currently printing (Decorated).")
+                        self.prusa_printer.event_cb(const.Event.COMMAND_REJECTED, const.Source.PLUGIN, command=const.Command.PAUSE_PRINT, reason="Not printing")
+                        return {"source": const.Source.PLUGIN, "error": "Not printing"}
+                    return {"source": const.Source.PLUGIN}
+                except Exception as e:
+                    self._logger.error(f"Error handling PAUSE_PRINT (Decorated): {e}", exc_info=True)
+                    self.prusa_printer.event_cb(const.Event.COMMAND_FAILED, const.Source.PLUGIN, command=const.Command.PAUSE_PRINT, reason=str(e))
+                    return {"source": const.Source.PLUGIN, "error": str(e)}
 
-                    # Path for FileSystemNode is usually relative to printer's FS root.
-                    # For items directly under 'local', their name is their path relative to root.
-                    # For items in subfolders, the path needs to be constructed.
-                    # The FileSystemNode path should be the full path from the FS root.
-                    # Let parent_node.path be the path of the parent.
-                    node_path = os.path.join(parent_node.path, name).lstrip("/")
-                    if parent_node.path == "/" : # Root node special case
-                        node_path = name
-
-
-                    node = FileSystemNode(
-                        name=name,
-                        path=node_path, # This path might need adjustment based on SDK expectations for root.
-                        type=node_type,
-                        size=item_data.get("size", 0) if node_type == NodeType.FILE else 0,
-                        m_timestamp=int(item_data.get("date", time.time()))
-                    )
-
-                    # Add estimated print time if available (for files)
-                    if node_type == NodeType.FILE and item_data.get("gcodeAnalysis"):
-                        estimated_print_time = item_data["gcodeAnalysis"].get("estimatedPrintTime")
-                        if estimated_print_time:
-                            node.print_time = int(estimated_print_time) # Assuming SDK expects int
-
-                    parent_node.add_child(node)
-
-                    if node_type == NodeType.DIR and "children" in item_data:
-                        build_fs_tree(item_data.get("children", {}), node)
-
-            if self.prusa_printer and self.prusa_printer.fs and self.prusa_printer.fs.root:
-                build_fs_tree(octoprint_files_data.get('local', {}), self.prusa_printer.fs.root)
-            else:
-                self._logger.error("Prusa printer FS root not available for population.")
-                return {"error": "FS root not available for population", "source": const.Source.WUI}
-
-
-            # Set total and free space
-            try:
-                actual_uploads_path = self._file_manager.get_basedir("local")
-                if actual_uploads_path and os.path.exists(actual_uploads_path):
-                    stat = os.statvfs(actual_uploads_path)
-                    self.prusa_printer.fs.fs_free_space = stat.f_bavail * stat.f_frsize
-                    self.prusa_printer.fs.fs_total_space = stat.f_blocks * stat.f_frsize
-                    self._logger.info(f"Disk space for '{actual_uploads_path}': Free: {self.prusa_printer.fs.fs_free_space}, Total: {self.prusa_printer.fs.fs_total_space}")
-                else:
-                    self._logger.warning(f"Could not determine valid uploads path ('{actual_uploads_path}') for disk space calculation. Path does not exist or is not accessible. Using defaults (0).")
-                    self.prusa_printer.fs.fs_free_space = 0
-                    self.prusa_printer.fs.fs_total_space = 0
-            except Exception as e_stat:
-                self._logger.error(f"Error calculating disk space for path '{actual_uploads_path}': {e_stat}", exc_info=True)
-                self.prusa_printer.fs.fs_free_space = 0
-                self.prusa_printer.fs.fs_total_space = 0
-
-            self._logger.info("File system information updated for Prusa Connect based on SEND_INFO.")
-            # The SDK should detect the change in self.prusa_printer.fs and send it.
-            # This handler's return value confirms processing.
-            return {"message": "File system info processed", "source": const.Source.WUI}
-
-        except Exception as e:
-            self._logger.error(f"Error handling SEND_INFO: {e}", exc_info=True)
-            return {"error": str(e), "source": const.Source.WUI}
-
-    def _handle_start_print(self, args):
-        self._logger.info(f"Handling START_PRINT command with args: {args}")
-
-        filename = None
-        if isinstance(args, list) and len(args) > 0:
-            filename = args[0]
-        elif isinstance(args, str):
-            filename = args
-
-        if not filename or not isinstance(filename, str):
-            self._logger.error("START_PRINT: Filename not provided or invalid.")
-            # self.prusa_printer.event_cb(const.Event.COMMAND_FAILED, command_id=const.Command.START_PRINT, message="Filename missing")
-            return {"error": "Filename missing", "source": const.Source.WUI} # SDK expects dict response
-
-        try:
-            # Ensure the file exists in OctoPrint's local storage
-            # The filename from Prusa Connect might not include the full path or correct origin.
-            # We need to find it. This assumes files are in 'local' storage.
-            # A more robust solution might involve checking selected_file_path if already selected via another interface.
-
-            # Check if the file exists using OctoPrint's file manager
-            if not self._file_manager.file_exists("local", filename):
-                self._logger.error(f"START_PRINT: File '{filename}' not found in local storage via file_manager.")
-                # Attempt to find the file by iterating if the name is correct but path is not known by PrusaConnect
-                # This is a simplified check. A full search might be needed if paths are complex.
-                # For now, we require exact name match in 'local'.
-                # self.prusa_printer.event_cb(const.Event.COMMAND_FAILED, command_id=const.Command.START_PRINT, message=f"File {filename} not found")
-                return {"error": f"File '{filename}' not found", "source": const.Source.WUI}
-
-            # Get the full path on disk for OctoPrint's printer module
-            path_to_file = self._file_manager.path_on_disk("local", filename)
-            if not path_to_file: # Should be redundant if file_exists passed, but good practice
-                 self._logger.error(f"START_PRINT: Could not get disk path for supposedly existing file '{filename}'.")
-                 return {"error": f"Could not get disk path for {filename}", "source": const.Source.WUI}
-
-            self._logger.info(f"Attempting to select and print file: {path_to_file}")
-            self._printer.select_file(path_to_file, printAfterSelect=True)
-
-            # SDK's set_state is primarily for telemetry. OctoPrint's state will propagate.
-            # However, explicitly setting it can make Prusa Connect UI more responsive.
-            self.prusa_printer.set_state(const.State.PRINTING)
-            self._logger.info(f"Successfully initiated print for {filename}")
-            return {"source": const.Source.WUI} # Success
-        except Exception as e:
-            self._logger.error(f"Error handling START_PRINT for {filename}: {e}", exc_info=True)
-            error_msg = f"Error handling START_PRINT for file '{filename}': {e}"
-            self._logger.error(error_msg, exc_info=True)
-            if self.prusa_printer and self.prusa_printer.token_set:
+            @self.prusa_printer.handler(const.Command.RESUME_PRINT)
+            def decorated_handle_resume_print(args=None):
+                self._logger.info(f"Prusa Connect Command (Decorated): RESUME_PRINT. Args: {args}")
                 try:
-                    self.prusa_printer.event_cb(const.Event.PROJECT_FAILED,
-                                                message=f"OctoPrint failed to start print: {str(e)[:100]}",
-                                                source=const.Source.WUI)
-                except Exception as sdk_event_err:
-                    self._logger.error(f"Failed to send PROJECT_FAILED event to Prusa Connect: {sdk_event_err}", exc_info=True)
-            return {"error": str(e), "source": const.Source.WUI}
+                    if self._printer.is_paused():
+                        self._printer.resume_print()
+                        self.prusa_printer.set_state(const.State.PRINTING)
+                        self._logger.info("Print resumed successfully via Prusa Connect command (Decorated).")
+                    else:
+                        self._logger.warning("Cannot resume: Printer is not currently paused (Decorated).")
+                        self.prusa_printer.event_cb(const.Event.COMMAND_REJECTED, const.Source.PLUGIN, command=const.Command.RESUME_PRINT, reason="Not paused")
+                        return {"source": const.Source.PLUGIN, "error": "Not paused"}
+                    return {"source": const.Source.PLUGIN}
+                except Exception as e:
+                    self._logger.error(f"Error handling RESUME_PRINT (Decorated): {e}", exc_info=True)
+                    self.prusa_printer.event_cb(const.Event.COMMAND_FAILED, const.Source.PLUGIN, command=const.Command.RESUME_PRINT, reason=str(e))
+                    return {"source": const.Source.PLUGIN, "error": str(e)}
 
-    def _handle_stop_print(self, args=None):
-        self._logger.info(f"Handling STOP_PRINT command. Args: {args}")
-        try:
-            self._printer.cancel_print()
-            self.prusa_printer.set_state(const.State.READY)
-            self._logger.info("Print cancelled successfully via Prusa Connect command.")
-            return {"source": const.Source.WUI}
-        except Exception as e:
-            error_msg = f"Error handling STOP_PRINT: {e}"
-            self._logger.error(error_msg, exc_info=True)
-            if self.prusa_printer and self.prusa_printer.token_set:
+            @self.prusa_printer.handler(const.Command.SEND_INFO)
+            def decorated_handle_send_info(args=None):
+                self._logger.info(f"Prusa Connect Command (Decorated): SEND_INFO. Args: {args}")
                 try:
-                    self.prusa_printer.event_cb(const.Event.FAILED, message=f"Failed to stop print: {str(e)[:100]}", source=const.Source.WUI)
-                except Exception as sdk_event_err:
-                    self._logger.error(f"Failed to send FAILED event for STOP_PRINT: {sdk_event_err}", exc_info=True)
-            return {"error": str(e), "source": const.Source.WUI}
+                    if not self.prusa_printer or not self.prusa_printer.fs:
+                        self._logger.error("Filesystem object (self.prusa_printer.fs) not available (Decorated).")
+                        # No specific event_cb for this internal check, but fail the command.
+                        # The SDK might retry or handle this. For now, return error.
+                        return {"source": const.Source.PLUGIN, "error": "Filesystem not initialized"}
 
-    def _handle_pause_print(self, args=None):
-        self._logger.info(f"Handling PAUSE_PRINT command. Args: {args}")
-        try:
-            if self._printer.is_printing() and not self._printer.is_paused():
-                self._printer.pause_print()
-                self.prusa_printer.set_state(const.State.PAUSED)
-                self._logger.info("Print paused successfully via Prusa Connect command.")
-            elif self._printer.is_paused():
-                self._logger.info("Print is already paused. No action taken.")
-            else:
-                self._logger.warning("Cannot pause: Printer is not currently printing.")
-                return {"error": "Not printing", "source": const.Source.WUI}
-            return {"source": const.Source.WUI}
-        except Exception as e:
-            error_msg = f"Error handling PAUSE_PRINT: {e}"
-            self._logger.error(error_msg, exc_info=True)
-            if self.prusa_printer and self.prusa_printer.token_set:
-                try:
-                    self.prusa_printer.event_cb(const.Event.FAILED, message=f"Failed to pause print: {str(e)[:100]}", source=const.Source.WUI)
-                except Exception as sdk_event_err:
-                    self._logger.error(f"Failed to send FAILED event for PAUSE_PRINT: {sdk_event_err}", exc_info=True)
-            return {"error": str(e), "source": const.Source.WUI}
+                    octoprint_files_data = self._file_manager.list_files(recursive=True, locations=['local'])
 
-    def _handle_resume_print(self, args=None):
-        self._logger.info(f"Handling RESUME_PRINT command. Args: {args}")
-        try:
-            if self._printer.is_paused():
-                self._printer.resume_print()
-                self.prusa_printer.set_state(const.State.PRINTING)
-                self._logger.info("Print resumed successfully via Prusa Connect command.")
-            else:
-                self._logger.warning("Cannot resume: Printer is not currently paused.")
-                return {"error": "Not paused", "source": const.Source.WUI}
-            return {"source": const.Source.WUI}
+                    if self.prusa_printer.fs.root:
+                        self.prusa_printer.fs.root.children.clear()
+                    else:
+                        self._logger.error("Prusa printer FS root is None, cannot clear or build tree (Decorated).")
+                        return {"source": const.Source.PLUGIN, "error": "FS root is None"}
+
+                    def build_fs_tree(octo_files_dict, parent_node):
+                        for name, item_data in octo_files_dict.items():
+                            node_type = None
+                            if item_data["type"] == "folder":
+                                node_type = NodeType.DIR
+                            elif item_data["type"] == "machinecode":
+                                node_type = NodeType.FILE
+                            else:
+                                self._logger.debug(f"Skipping item '{name}' of type '{item_data['type']}' (Decorated)")
+                                continue
+
+                            node_path = os.path.join(parent_node.path, name).lstrip("/")
+                            if parent_node.path == "/":
+                                node_path = name
+
+                            node = FileSystemNode(
+                                name=name,
+                                path=node_path,
+                                type=node_type,
+                                size=item_data.get("size", 0) if node_type == NodeType.FILE else 0,
+                                m_timestamp=int(item_data.get("date", time.time()))
+                            )
+
+                            if node_type == NodeType.FILE and item_data.get("gcodeAnalysis"):
+                                estimated_print_time = item_data["gcodeAnalysis"].get("estimatedPrintTime")
+                                if estimated_print_time:
+                                    node.print_time = int(estimated_print_time)
+                            parent_node.add_child(node)
+                            if node_type == NodeType.DIR and "children" in item_data:
+                                build_fs_tree(item_data.get("children", {}), node)
+
+                    if self.prusa_printer and self.prusa_printer.fs and self.prusa_printer.fs.root:
+                        build_fs_tree(octoprint_files_data.get('local', {}), self.prusa_printer.fs.root)
+                    else:
+                        self._logger.error("Prusa printer FS root not available for population (Decorated).")
+                        return {"source": const.Source.PLUGIN, "error": "FS root not available for population"}
+
+                    try:
+                        actual_uploads_path = self._file_manager.get_basedir("local")
+                        if actual_uploads_path and os.path.exists(actual_uploads_path):
+                            stat = os.statvfs(actual_uploads_path)
+                            self.prusa_printer.fs.fs_free_space = stat.f_bavail * stat.f_frsize
+                            self.prusa_printer.fs.fs_total_space = stat.f_blocks * stat.f_frsize
+                            self._logger.info(f"Disk space for '{actual_uploads_path}': Free: {self.prusa_printer.fs.fs_free_space}, Total: {self.prusa_printer.fs.fs_total_space} (Decorated)")
+                        else:
+                            self._logger.warning(f"Could not determine valid uploads path ('{actual_uploads_path}') for disk space calculation (Decorated). Using defaults (0).")
+                            self.prusa_printer.fs.fs_free_space = 0
+                            self.prusa_printer.fs.fs_total_space = 0
+                    except Exception as e_stat:
+                        self._logger.error(f"Error calculating disk space for path '{actual_uploads_path}': {e_stat} (Decorated)", exc_info=True)
+                        self.prusa_printer.fs.fs_free_space = 0
+                        self.prusa_printer.fs.fs_total_space = 0
+
+                    self._logger.info("File system information updated for Prusa Connect based on SEND_INFO (Decorated).")
+                    return {"message": "File system info processed", "source": const.Source.PLUGIN}
+                except Exception as e:
+                    self._logger.error(f"Error handling SEND_INFO (Decorated): {e}", exc_info=True)
+                    self.prusa_printer.event_cb(const.Event.COMMAND_FAILED, const.Source.PLUGIN, command=const.Command.SEND_INFO, reason=str(e))
+                    return {"source": const.Source.PLUGIN, "error": str(e)}
+
+            self._logger.info("Successfully registered Prusa Connect SDK command handlers (Decorated).")
         except Exception as e:
-            error_msg = f"Error handling RESUME_PRINT: {e}"
-            self._logger.error(error_msg, exc_info=True)
-            if self.prusa_printer and self.prusa_printer.token_set:
-                try:
-                    self.prusa_printer.event_cb(const.Event.FAILED, message=f"Failed to resume print: {str(e)[:100]}", source=const.Source.WUI)
-                except Exception as sdk_event_err:
-                    self._logger.error(f"Failed to send FAILED event for RESUME_PRINT: {sdk_event_err}", exc_info=True)
-            return {"error": str(e), "source": const.Source.WUI}
-    # --- End Command Handlers ---
+            self._logger.error(f"Error registering SDK command handlers (Decorated): {e}", exc_info=True)
+
+    # The old _handle_... methods are now removed as their logic is inside _register_sdk_handlers.
 
     def _initiate_registration(self):
-        self._logger.info("Initiating Prusa Connect registration process (e.g., via wizard or manual trigger)...")
-        if not self.prusa_printer: # Guard against uninitialized printer object
-            self._logger.error("Cannot initiate registration: prusa_printer not initialized.", exc_info=True)
-            return
-
-        try:
-            self.prusa_printer.register() # This call attempts to get tmp_code
-            tmp_code = self.prusa_printer.tmp_code
-
-            if tmp_code:
-                self._logger.info(f"Successfully received temporary code from Prusa Connect: {tmp_code}")
-                self._settings.set(["prusa_connect_tmp_code"], tmp_code)
-                self._settings.save()
-                self.temp_code_displayed = True # Legacy flag, might not be used by wizard
-                self._registration_error_message = None # Clear any previous error
-                self._start_token_retrieval_timer(tmp_code)
-            else:
-                self._logger.error("Failed to retrieve temporary code from Prusa Connect (tmp_code is None after register() call).")
-                self._registration_error_message = "Failed to obtain temporary code from Prusa Connect. Server might be busy or unreachable. Please check logs."
-        except Exception as e:
-            self._logger.error(f"Exception during Prusa Connect self.prusa_printer.register() call: {e}", exc_info=True)
-            self._registration_error_message = f"Error obtaining temp code: {str(e)}. Please check logs and network."
-        finally:
-            # Always update status, whether success or failure, to push error message or new tmp_code
-            self._get_prusa_connect_status()
-
-
-    def _start_token_retrieval_timer(self, tmp_code):
-        self._logger.info(f"Starting token retrieval timer with tmp_code: {tmp_code}")
-        if self.token_retrieval_timer is not None and self.token_retrieval_timer.is_alive(): # Check if timer is alive
-            self.token_retrieval_timer.cancel()
-            self._logger.info("Cancelled existing token retrieval timer.")
-
-        self.token_retrieval_timer = RepeatedTimer(
-            10.0,
-            self._check_for_token,
-            run_first=True, # Check immediately then repeat
-            condition=lambda: not (self.prusa_printer and self.prusa_printer.token_set), # Continue if no token
-            on_condition_false=self._token_retrieved_successfully, # Call when token IS set
-            daemon=True
-        )
-        self.token_retrieval_timer.start()
-        self._logger.info("Token retrieval timer started.")
-
-
-    def _check_for_token(self):
-        if not self.prusa_printer: # Guard
-            self._logger.warning("Cannot check for token: prusa_printer not initialized. Stopping timer.", exc_info=True)
-            if self.token_retrieval_timer: self.token_retrieval_timer.cancel()
-            return
-
-        if not self.prusa_printer.tmp_code:
-            # Attempt to restore tmp_code if cleared from printer object (e.g. after restart)
-            stored_tmp_code = self._settings.get(["prusa_connect_tmp_code"])
-            if stored_tmp_code:
-                self.prusa_printer.tmp_code = stored_tmp_code
-                self._logger.info(f"Restored tmp_code {stored_tmp_code} to printer object for token check.")
-            else:
-                self._logger.warning("No tmp_code on printer object or in settings. Stopping token retrieval.")
-                if self.token_retrieval_timer: self.token_retrieval_timer.cancel()
-                self.last_status_sent_to_ui = "" ; self._get_prusa_connect_status() # Update UI
-                return
-
-        current_tmp_code = self.prusa_printer.tmp_code # Use current tmp_code for logging
-        self._logger.info(f"Checking for token with tmp_code: {current_tmp_code}...")
-        try:
-            # get_token() returns True if token is obtained, False otherwise.
-            # It sets self.prusa_printer.token and self.prusa_printer.token_set internally.
-            token_obtained_now = self.prusa_printer.get_token()
-
-            if token_obtained_now:
-                # This means the token was just obtained in this call.
-                # The RepeatedTimer's condition will cause it to stop, and _token_retrieved_successfully will be called.
-                self._logger.info(f"Token appears to have been retrieved successfully for tmp_code: {current_tmp_code} during get_token() call.")
-                self._registration_error_message = None # Clear error as we got a token
-                # _token_retrieved_successfully will handle saving and further status updates
-            elif self.prusa_printer.token_set:
-                # Token was already set, but timer is still running (shouldn't happen if condition is correct)
-                self._logger.info("Token was already set. Timer should have stopped.")
-                self._registration_error_message = None # Clear error
-            else:
-                # Token not yet available, no exception, this is normal polling
-                self._logger.info(f"Token not yet available for tmp_code: {current_tmp_code}. Polling continues.")
-                # Don't clear _registration_error_message here, an error might be transient from previous attempt
-                # Only clear error on explicit success.
-        except Exception as e:
-            self._logger.error(f"Error while checking for token with tmp_code {current_tmp_code}: {e}", exc_info=True)
-            self._registration_error_message = f"Error polling for token: {str(e)}. Will retry."
-            # Update UI to reflect potential issue
-            self._get_prusa_connect_status() # Push error to UI
-
-    def _token_retrieved_successfully(self):
-        if not self.prusa_printer or not self.prusa_printer.token: # Guard
-            self._logger.error("Token retrieved successfully callback, but printer object or token is None. This should not happen.", exc_info=True)
-            self._registration_error_message = "Internal error after token retrieval. Please check logs."
-            self._get_prusa_connect_status()
-            return
-
-        token = self.prusa_printer.token
-        self._logger.info(f"Successfully retrieved and confirmed Prusa Connect token: {token[:4]}...{token[-4:]}")
-        self._settings.set(["prusa_connect_token"], token)
-        self._settings.set(["prusa_connect_tmp_code"], None) # Clear temp code from settings
-        self._settings.save()
-        self._registration_error_message = None # Clear any errors as we have succeeded
-
-        self.temp_code_displayed = False # Reset flag
-        # self.last_status_sent_to_ui = "" # This is implicitly handled by calling _get_prusa_connect_status()
-        self._get_prusa_connect_status() # Ensure UI is updated with new token status
-
-        if self.token_retrieval_timer:
-            # The timer should have already stopped itself due to the condition.
-            # This is an explicit cancel for safety, though normally not needed.
-            self.token_retrieval_timer.cancel()
-            self.token_retrieval_timer = None # Clear the timer object
-            self._logger.info("Token retrieval timer stopped and cleared.")
-
-        # Ensure the printer object is configured with the new token for the SDK loop.
-        # The SDK's Printer.token attribute is set by get_token().
-        # The Printer.set_connection method also sets this, but it's primarily for initial setup.
-        # The loop should pick up the new token automatically.
-        # For clarity or if issues arise, one could re-call:
-        # self.prusa_printer.set_connection(server_url=self.prusa_server, token=token)
-        self._logger.info("Prusa Connect SDK is now configured with the token.")
-        self._start_telemetry_timer() # Start telemetry once token is retrieved
-
-
-    def _start_telemetry_timer(self):
         if not self.prusa_printer or not self.prusa_printer.token_set:
             self._logger.info("Cannot start telemetry timer: Prusa printer not ready or token not set.")
             return
