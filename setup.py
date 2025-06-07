@@ -53,7 +53,7 @@ def params():
 	zip_safe = True
  
 	# No specific requirements for now
-	install_requires = []
+	install_requires = ["prusa-connect-sdk-printer>=0.5.0,<0.6.0"]
 
 	# Hook the plugin into the "octoprint.plugin" entry point, mapping the plugin_identifier to the plugin_package.
 	# That way OctoPrint will be able to find the plugin and load it.

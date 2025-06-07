@@ -1,69 +1,104 @@
-<div id="settings_plugin_livegcodecontrol">
-    <h2>Live G-code Control Rules</h2>
+<div id="settings_plugin_prusaconnectbridge_content_area">
+    <h4>Prusa Connect Bridge Status</h4>
+    <p>
+        <strong>Serial Number (SN):</strong>
+        <span data-bind="text: settings.plugins.prusaconnectbridge.prusa_connect_sn() ? settings.plugins.prusaconnectbridge.prusa_connect_sn() : 'Not yet generated'"></span>
+    </p>
+    <p>
+        <strong>Registration Status:</strong>
+        <span data-bind="text: prusaConnectStatusTextForUI"></span>
+    </p>
 
+    <hr>
+    <h4>Configuration</h4>
     <form class="form-horizontal">
         <div class="control-group">
-            <label class="control-label" for="lgcc_pattern">Regex Pattern</label>
+            <label class="control-label" for="pconnect_server_url">Prusa Connect Server URL</label>
             <div class="controls">
-                <input type="text" id="lgcc_pattern" data-bind="value: newRulePattern" class="input-xlarge">
-            </div>
-        </div>
-        <div class="control-group">
-            <label class="control-label" for="lgcc_action_type">Action Type</label>
-            <div class="controls">
-                <select id="lgcc_action_type" data-bind="value: newRuleActionType">
-                    <option value="modify">Modify</option>
-                    <option value="skip">Skip/Suppress</option>
-                    <option value="inject_before">Inject Before</option>
-                    <option value="inject_after">Inject After</option>
-                    <option value="replace">Replace</option>
-                </select>
-            </div>
-        </div>
-        <div class="control-group">
-            <label class="control-label" for="lgcc_action_gcode">Action G-code(s)</label>
-            <div class="controls">
-                <textarea id="lgcc_action_gcode" rows="3" data-bind="value: newRuleActionGcode" class="input-xlarge"></textarea>
-                <p class="muted">Enter one G-code command per line if applicable for the action type.</p>
-            </div>
-        </div>
-        <div class="control-group">
-            <div class="controls">
-                <button type="button" class="btn btn-primary" id="lgcc_add_rule_btn" data-bind="click: addRule, text: addOrUpdateRuleButtonText"></button>
-                <button type="button" class="btn" id="lgcc_cancel_edit_btn" data-bind="click: cancelEdit, visible: editingRule" style="margin-left: 5px;">Cancel Edit</button>
+                <input type="text" id="pconnect_server_url" class="input-xlarge" data-bind="value: settings.plugins.prusaconnectbridge.prusa_server_url">
             </div>
         </div>
     </form>
 
     <hr>
-
-    <h3>Current Rules</h3>
-    <table class="table table-striped table-bordered table-hover" id="lgcc_rules_table">
-        <thead>
-            <tr>
-                <th style="width: 10%;">Enabled</th>
-                <th>Pattern</th>
-                <th>Action</th>
-                <th>G-code</th>
-                <th style="width: 20%;">Controls</th>
-            </tr>
-        </thead>
-        <tbody data-bind="foreach: rules">
-            <tr>
-                <td><input type="checkbox" data-bind="checked: enabled"></td>
-                <td data-bind="text: pattern"></td>
-                <td data-bind="text: actionType"></td>
-                <td data-bind="text: actionGcode" style="white-space: pre-wrap;"></td>
-                <td>
-                    <button class="btn btn-mini" data-bind="click: $parent.editRule.bind($parent)">Edit</button>
-                    <button class="btn btn-mini btn-danger" data-bind="click: $parent.removeRule.bind($parent)">Delete</button>
-                </td>
-            </tr>
-        </tbody>
-        <tbody data-bind="ifnot: rules().length">
-            <tr>
-                <td colspan="5" class="text-center">No rules defined yet.</td>
-            </tr>
-        </tbody>
-    </table>
+    <h4>Actions</h4>
+    <p>
+        <button class="btn btn-danger" id="pconnect_clear_settings_btn">Clear Stored Credentials & Re-Register</button>
+        <br>
+        <small class="text-muted">
+            Removes current Prusa Connect token, SN, and fingerprint. Initiates re-registration.
+            If server URL changed, save settings first. Restart OctoPrint for a clean SDK reset if issues persist.
+        </small>
+    </p>
 </div>
+
+<script type="text/javascript">
+$(function() {
+    function PrusaConnectBridgeSettingsViewModel(parameters) {
+        var self = this;
+        self.settingsViewModel = parameters[0];
+        self.loginStateViewModel = parameters[1]; // For user permission check
+
+        self.prusaConnectStatusTextForUI = ko.observable(
+            "{{ prusa_connect_status_text | e | replace('\"', '\\\"') }}" // Initial value, ensure proper escaping
+        );
+         // SN could also be an observable if it can change dynamically without full settings reload
+        // self.prusaConnectSNForUI = ko.observable("{{ prusa_connect_sn | e }}");
+
+
+        self.onDataUpdaterPluginMessage = function(plugin, data) {
+            if (plugin !== "prusaconnectbridge" || !data) {
+                return;
+            }
+            if (data.status_text !== undefined) { // Check for undefined specifically
+                self.prusaConnectStatusTextForUI(data.status_text);
+            }
+            if (data.prusa_connect_sn !== undefined) {
+                // Update the underlying settings observable if SN changes
+                // This ensures that if other parts of settings UI depend on this value, they also update
+                self.settingsViewModel.settings.plugins.prusaconnectbridge.prusa_connect_sn(data.prusa_connect_sn);
+            }
+        };
+
+        self.onAfterBinding = function() {
+            // Set initial status from template, which should be up-to-date via get_template_vars
+            var initialStatus = "{{ prusa_connect_status_text | e | replace('\"', '\\\"') }}";
+            self.prusaConnectStatusTextForUI(initialStatus);
+        };
+
+        $("#pconnect_clear_settings_btn").on("click", function() {
+            if (!self.loginStateViewModel.isUser()) { // Check if user is logged in
+                new PNotify({ title: "Permission Denied", text: "You must be logged in to perform this action.", type: "error", hide: false });
+                return;
+            }
+
+            OctoPrint.simpleApiCommand("prusaconnectbridge", "clear_prusa_connect_settings", {})
+                .done(function(response) {
+                    new PNotify({
+                        title: "Prusa Connect Bridge",
+                        text: response.message || "Settings cleared. Re-registration process initiated.",
+                        type: "info",
+                        hide: false // Make message sticky
+                    });
+                    // Request full settings refresh to update SN and other bound values
+                    OctoPrint.settings.requestData();
+                    // Status will update via onDataUpdaterPluginMessage from backend push or after settings refresh
+                    self.prusaConnectStatusTextForUI("Re-registration initiated. Refreshing data...");
+                })
+                .fail(function(jqXHR) {
+                    var errorMsg = "Failed to clear settings. Please check plugin logs for details.";
+                    if (jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                        errorMsg = jqXHR.responseJSON.message;
+                    }
+                    new PNotify({ title: "Prusa Connect Bridge - Error", text: errorMsg, type: "error", hide: false });
+                });
+        });
+    }
+
+    OCTOPRINT_VIEWMODELS.push({
+        construct: PrusaConnectBridgeSettingsViewModel,
+        dependencies: ["settingsViewModel", "loginStateViewModel"],
+        elements: ["#settings_plugin_prusaconnectbridge_content_area"]
+    });
+});
+</script>
