@@ -6,8 +6,8 @@ import setuptools
 plugin_identifier = "OctoPrint-PrusaConnect-Bridge"
 plugin_package = "octoprint_prusaconnectbridge"
 plugin_name = "PrusaConnect-Bridge"
-plugin_version = "0.1.0"
-plugin_description = "A plugin for real-time G-code stream manipulation based on user-defined rules."
+plugin_version = "0.1.1"
+plugin_description = "OctoPrint plugin bridge to Prusa Connect (unofficial)."
 plugin_author = "GlitchLab.xyz"
 plugin_author_email = "contact@glitchlab.xyz"
 plugin_url = "https://github.com/VisualBoy/PrusaConnect-Bridge"
@@ -58,7 +58,7 @@ def params():
 	# Hook the plugin into the "octoprint.plugin" entry point, mapping the plugin_identifier to the plugin_package.
 	# That way OctoPrint will be able to find the plugin and load it.
 	entry_points = {
-		"octoprint.plugin": ["%s = %s" % (plugin_identifier, plugin_package)]
+		"octoprint.plugin": ["OctoPrint-PrusaConnect-Bridge = octoprint_prusaconnectbridge"]
 	}
 
 	return locals()
