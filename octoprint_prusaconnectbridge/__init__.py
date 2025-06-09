@@ -15,7 +15,6 @@ import flask # Added for API command response
 # import threading
 from octoprint.util import RepeatedTimer
 ### from prusa.connect.printer.filesystem import FileSystemNode, NodeType  # SDK <= 0.7.0
-from prusa.connect.printer.models import FileSystemNode, NodeType          # SDK >= 0.7.1
 # octoprint.plugin required for SettingsPlugin.on_settings_save
 import octoprint.plugin
 from octoprint.plugin import WizardPlugin # Import WizardPlugin
@@ -382,47 +381,59 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
 
                     octoprint_files_data = self._file_manager.list_files(recursive=True, locations=['local'])
 
-                    if self.prusa_printer.fs.root:
-                        self.prusa_printer.fs.root.children.clear()
-                    else:
-                        self._logger.error("Prusa printer FS root is None, cannot clear or build tree (Decorated).")
-                        return {"source": const.Source.PLUGIN, "error": "FS root is None"}
+                    # Initialize self.prusa_printer.fs.root as a dictionary
+                    self.prusa_printer.fs.root = {
+                        'name': '/',
+                        'path': '/',
+                        'type': 'DIR',
+                        'children': [],
+                        'size': 0,
+                        'm_timestamp': int(time.time())
+                    }
+                    # Clearing children:
+                    # self.prusa_printer.fs.root['children'].clear() # This is already done by re-assigning above essentially
 
-                    def build_fs_tree(octo_files_dict, parent_node):
+                    def build_fs_tree(octo_files_dict, parent_node_dict):
                         for name, item_data in octo_files_dict.items():
-                            node_type = None
+                            node_type_str = None
                             if item_data["type"] == "folder":
-                                node_type = NodeType.DIR
+                                node_type_str = 'DIR'
                             elif item_data["type"] == "machinecode":
-                                node_type = NodeType.FILE
+                                node_type_str = 'FILE'
                             else:
                                 self._logger.debug(f"Skipping item '{name}' of type '{item_data['type']}' (Decorated)")
                                 continue
 
-                            node_path = os.path.join(parent_node.path, name).lstrip("/")
-                            if parent_node.path == "/":
+                            node_path = os.path.join(parent_node_dict['path'], name).lstrip("/")
+                            if parent_node_dict['path'] == "/":
                                 node_path = name
 
-                            node = FileSystemNode(
-                                name=name,
-                                path=node_path,
-                                type=node_type,
-                                size=item_data.get("size", 0) if node_type == NodeType.FILE else 0,
-                                m_timestamp=int(item_data.get("date", time.time()))
-                            )
+                            node_dict = {
+                                'name': name,
+                                'path': node_path,
+                                'type': node_type_str,
+                                'size': item_data.get("size", 0) if node_type_str == 'FILE' else 0,
+                                'm_timestamp': int(item_data.get("date", time.time())),
+                            }
+                            if node_type_str == 'DIR':
+                                node_dict['children'] = []
 
-                            if node_type == NodeType.FILE and item_data.get("gcodeAnalysis"):
+                            if node_type_str == 'FILE' and item_data.get("gcodeAnalysis"):
                                 estimated_print_time = item_data["gcodeAnalysis"].get("estimatedPrintTime")
                                 if estimated_print_time:
-                                    node.print_time = int(estimated_print_time)
-                            parent_node.add_child(node)
-                            if node_type == NodeType.DIR and "children" in item_data:
-                                build_fs_tree(item_data.get("children", {}), node)
+                                    node_dict['print_time'] = int(estimated_print_time)
+
+                            parent_node_dict['children'].append(node_dict)
+
+                            if node_type_str == 'DIR' and "children" in item_data:
+                                build_fs_tree(item_data.get("children", {}), node_dict)
 
                     if self.prusa_printer and self.prusa_printer.fs and self.prusa_printer.fs.root:
+                        # Ensure root children are clear before building, self.prusa_printer.fs.root is now a dict
+                        self.prusa_printer.fs.root['children'].clear()
                         build_fs_tree(octoprint_files_data.get('local', {}), self.prusa_printer.fs.root)
                     else:
-                        self._logger.error("Prusa printer FS root not available for population (Decorated).")
+                        self._logger.error("Prusa printer FS root (dict) not available for population (Decorated).")
                         return {"source": const.Source.PLUGIN, "error": "FS root not available for population"}
 
                     try:
