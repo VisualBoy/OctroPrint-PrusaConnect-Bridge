@@ -14,7 +14,8 @@ import flask # Added for API command response
 # Ensure threading is imported if not already (it was from previous steps)
 # import threading
 from octoprint.util import RepeatedTimer
-from prusa.connect.printer.filesystem import FileSystemNode, NodeType
+### from prusa.connect.printer.filesystem import FileSystemNode, NodeType  # SDK <= 0.7.0
+from prusa.connect.printer.models import FileSystemNode, NodeType          # SDK >= 0.7.0
 # octoprint.plugin required for SettingsPlugin.on_settings_save
 import octoprint.plugin
 from octoprint.plugin import WizardPlugin # Import WizardPlugin
