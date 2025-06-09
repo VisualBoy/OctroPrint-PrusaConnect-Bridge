@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated `prusa-connect-sdk-printer` dependency to `==0.7.0` in `setup.py`.
 
-## [0.1.1] - 2024-07-24
+## [0.1.1] - 2025-06-04
 ### Added
 - Initial integration with Prusa Connect SDK.
 - Functionality to monitor printer status (temperatures, print progress) via Prusa Connect.
@@ -27,12 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Revised README.md with accurate features, setup instructions, and new repository URL.
 - Updated plugin marketplace file (`_plugins/PrusaConnect-Bridge.md`) with new description, features, URLs, and tags; removed obsolete G-code related content and screenshots.
 - Corrected repository URL in software update configuration.
-
-### Removed
-- Obsolete G-code manipulation feature (previously included mistakenly from a template).
-  - Removed all backend logic for G-code rule processing.
-  - Removed related settings and UI elements (though none were found in the settings template).
-- Outdated or placeholder content in documentation files.
 
 ### Fixed
 - Ensured `requirements.txt` includes `prusa-connect-sdk`.
