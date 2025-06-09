@@ -131,7 +131,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                     raise ValueError("SN or Fingerprint missing, cannot create Printer object.")
 
                 self._logger.info(f"Re-creating Prusa SDK Printer object with SN: {final_sn_for_sdk}, FP: {final_fp_for_sdk[:10]}...")
-                self.prusa_printer = Printer(fingerprint=final_fp_for_sdk, sn=final_sn_for_sdk, printer_type=const.PrinterType.I3MK3)
+                self.prusa_printer = Printer(fingerprint=final_fp_for_sdk, sn=final_sn_for_sdk)
                 self._logger.info("New Prusa SDK Printer object created.")
 
                 current_token_for_sdk = self._settings.get(["prusa_connect_token"]) # Might be None if force_reregistration
@@ -189,9 +189,6 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                     if hasattr(self._printer, 'get_firmware_uuid') and self._printer.get_firmware_uuid():
                         sn = self._printer.get_firmware_uuid()
                         self._logger.info(f"Using firmware UUID as SN: {sn}")
-                    elif self._printer.get_printer_profile().get("serial"):
-                        sn = self._printer.get_printer_profile().get("serial")
-                        self._logger.info(f"Using printer profile serial as SN: {sn}")
                     else:
                         sn = str(uuid.uuid4())
                         self._logger.info(f"Generated new UUID as SN: {sn}")
@@ -229,7 +226,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         sn, fingerprint = self._initialize_identifiers()
 
         try:
-            self.prusa_printer = Printer(fingerprint=fingerprint, sn=sn, printer_type=const.PrinterType.I3MK3)
+            self.prusa_printer = Printer(fingerprint=fingerprint, sn=sn)
             self._logger.info(f"Prusa SDK Printer object created. SN: {sn}, Fingerprint: {fingerprint[:10]}...")
         except Exception as e:
             self._logger.error(f"Failed to initialize Prusa SDK Printer object: {e}", exc_info=True)
@@ -700,7 +697,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
                 new_sn, new_fingerprint = self._initialize_identifiers()
 
                 # Create a new Printer object for the SDK
-                self.prusa_printer = Printer(fingerprint=new_fingerprint, sn=new_sn, printer_type=const.PrinterType.I3MK3)
+                self.prusa_printer = Printer(fingerprint=new_fingerprint, sn=new_sn)
                 self._logger.info(f"New Prusa SDK Printer object created. SN: {new_sn}, Fingerprint: {new_fingerprint}")
 
                 # Re-register handlers for the new printer object
@@ -809,7 +806,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
         # Optionally, send current status to pre-populate wizard dynamically if needed beyond get_wizard_details
         # self._get_prusa_connect_status() # This will send a plugin message
 
-    def on_wizard_finish(self):
+    def on_wizard_finish(self, handled):
         self._logger.info("PrusaConnectBridgePlugin: Wizard finished.")
         self._get_prusa_connect_status() # Update status on settings page etc.
 
