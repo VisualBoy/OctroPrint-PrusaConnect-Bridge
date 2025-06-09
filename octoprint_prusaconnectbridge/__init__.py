@@ -896,7 +896,7 @@ class PrusaConnectBridgePlugin(octoprint.plugin.SettingsPlugin,
 
 # Plugin registration
 __plugin_name__ = "PrusaConnect-Bridge"
-__plugin_version__ = "0.1.1"
+__plugin_version__ = "0.1.4"
 __plugin_description__ = "OctoPrint plugin bridge to Prusa Connect (unofficial)."
 __plugin_pythoncompat__ = ">=3,<4" # Python 3 compatibility
 
