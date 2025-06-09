@@ -6,7 +6,7 @@ import setuptools
 plugin_identifier = "OctoPrint-PrusaConnect-Bridge"
 plugin_package = "octoprint_prusaconnectbridge"
 plugin_name = "PrusaConnect-Bridge"
-plugin_version = "0.1.1"
+plugin_version = "0.1.4"
 plugin_description = "OctoPrint plugin bridge to Prusa Connect (unofficial)."
 plugin_author = "GlitchLab.xyz"
 plugin_author_email = "contact@glitchlab.xyz"
@@ -53,7 +53,7 @@ def params():
 	zip_safe = True
  
 	# Rrequirements:
-	install_requires = ["prusa-connect-sdk-printer==0.7.0"]
+	install_requires = ["prusa-connect-sdk-printer==0.7.1"]
 
 	# Hook the plugin into the "octoprint.plugin" entry point, mapping the plugin_identifier to the plugin_package.
 	# That way OctoPrint will be able to find the plugin and load it.
